@@ -1,0 +1,133 @@
+// ReverbDB Schema
+
+// An application user
+Table users {
+  id integer [primary key, increment]
+  username varchar [not null, unique]
+  email varchar [not null, unique]
+  password_hash varchar [not null]
+  first_name varchar [not null]
+  last_name varchar [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    username
+    email
+  }
+}
+
+// A role that can be assigned to a user, multiple roles can be assigned to a user
+// Roles are unique to a tenant, though default ones are populated for a tenant when a new tenant is created
+Table roles {
+  id integer [primary key, increment]
+  name varchar
+  tenant_id integer [ref: > tenants.id]
+}
+
+// Junction table to map n users to n roles
+Table user_roles {
+  user_id integer [ref: > users.id, not null]
+  role_id integer [ref: > roles.id, not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    user_id
+    role_id
+    (user_id, role_id) [primary key]
+  }
+}
+
+// A permission (also known as a scope) that can be assigned to a role, multiple permissions can be assigned to a role
+// Permissions are application-specific and are constant across all tenants
+Table permissions {
+  id integer [primary key, increment]
+  name varchar [not null, unique]
+  description text [not null]
+}
+
+// Junction table to map n roles to n permissions
+Table role_permissions {
+  role_id integer [ref: > roles.id, not null]
+  permission_id integer [ref: > permissions.id, not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    role_id
+    permission_id
+    (role_id, permission_id) [primary key]
+  }
+}
+
+// A tenant is a top-level collection of users, roles, permissions, patients, and patient lists
+Table tenants {
+  id integer [primary key, increment]
+  display_name varchar [not null]
+  url_safe_name varchar [not null, unique]
+  created_at timestamp [not null]
+
+  indexes {
+    url_safe_name
+  }
+}
+
+// Junction table to map n tenants to n roles
+Table tenant_roles {
+  tenant_id integer [ref: > tenants.id, not null]
+  role_id integer [ref: > roles.id, not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    tenant_id
+    role_id
+    (tenant_id, role_id) [primary key]
+  }
+}
+
+// A patient list is a collection of patients, and is unique to a tenant.
+Table patient_lists {
+  id integer [primary key, increment]
+  display_name varchar
+  url_safe_name varchar [not null]
+  tenant_id integer [ref: > tenants.id]
+
+  indexes {
+    (url_safe_name, tenant_id) [unique]
+  }
+}
+
+Table patients {
+  id integer [primary key, increment]
+  data json [not null]
+}
+
+// Junction table to map n patients to n patient lists
+Table patient_list_members {
+  patient_list_id integer [ref: > patient_lists.id, not null]
+  patient_id integer [ref: > patients.id, not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    patient_list_id
+    patient_id
+    (patient_list_id, patient_id) [primary key]
+  }
+}
+
+// Junction table to map n users to n tenants
+Table user_tenants {
+  user_id integer [ref: > users.id, not null]
+  tenant_id integer [ref: > tenants.id, not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    user_id
+    tenant_id
+    (user_id, tenant_id) [primary key]
+  }
+}

@@ -1,0 +1,269 @@
+[
+  {
+    "model": "gpt-4o",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Given a freetext admission note below, map the admission note to a following JSON schema and return only a json response. Do not respond with any other comments"
+      },
+      {
+        "role": "user",
+        "content": "Patient Information example"
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "patient_response",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "last_name": {
+              "type": "string"
+            },
+            "first_name": {
+              "type": "string"
+            },
+            "dob": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "mrn": {
+              "type": "string"
+            },
+            "one_liner": {
+              "type": "string"
+            },
+            "hpi": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            // "todos": {
+            //   "type": "array",
+            //   "items": {
+            //     "type": "object",
+            //     "properties": {
+            //       "description": {
+            //         "type": "string"
+            //       },
+            //       "due_date": {
+            //         "type": ["string", "null"]
+            //       },
+            //       "status": {
+            //         "type": "string",
+            //         "enum": ["OPEN", "CLOSED"]
+            //       }
+            //     },
+            //     "required": ["description", "status", "due_date"],
+            //     "additionalProperties": false
+            //   }
+            // },
+            "assessment_and_plan": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "assessment": {
+                    "type": "string",
+                    "description": "One element of the assessment, e.g. AKI, CHF exacerbation, Hyperkalemia, etc."
+                  },
+                  "plan": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["assessment", "plan"],
+                "additionalProperties": false
+              }
+            } //,
+            // "display_size": {
+            //   "type": "string",
+            //   "enum": ["1x", "2x", "3x"]
+            // }
+          },
+          "required": [
+            "last_name",
+            "first_name",
+            "dob",
+            "location",
+            "mrn",
+            "one_liner",
+            "hpi",
+            // "todos",
+            "assessment_and_plan"
+            // "display_size"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "last_name": "Doe",
+    "first_name": "Jane",
+    "dob": "02/12/1988",
+    "location": "Emergency Department",
+    "mrn": "M001234",
+    "one_liner": "35-year-old female with atypical chest pain, hypertension, type 2 diabetes mellitus, hyperlipidemia, and anxiety disorder.",
+    "hpi": [
+      "Mrs. Doe presents with atypical chest pain started 2 hours ago, described as pressing sensation in her left chest, worsened by deep breathing and movement, relieved by leaning forward.",
+      "She reports no radiation to the arm or jaw, no syncope, and no previous history of heart disease or similar episodes.",
+      "Experiencing increasing anxiety and stress due to work and personal issues."
+    ],
+    "todos": [
+      {
+        "description": "Schedule follow-up appointment in 2 weeks to reassess symptoms and adjust treatment plan.",
+        "due_date": null,
+        "status": "OPEN"
+      },
+      {
+        "description": "Order chest X-ray and ECG to rule out cardiac causes if necessary.",
+        "due_date": null,
+        "status": "OPEN"
+      },
+      {
+        "description": "Refer for cardiology consultation.",
+        "due_date": null,
+        "status": "OPEN"
+      }
+    ],
+    "assessment_and_plan": [
+      {
+        "assessment": "Atypical chest pain likely non-cardiac, possibly anxiety-related.",
+        "plan": [
+          "Prescribe antidepressant medication (e.g., fluoxetine) to manage anxiety and stress.",
+          "Schedule follow-up appointment in 2 weeks."
+        ]
+      },
+      {
+        "assessment": "Elevated vital signs, potential anxiety exacerbation.",
+        "plan": [
+          "Order chest X-ray and ECG as needed.",
+          "Provide oxygen therapy to alleviate symptoms."
+        ]
+      },
+      {
+        "assessment": "Atypical chest pain requires further evaluation.",
+        "plan": [
+          "Refer for cardiology consultation to evaluate for secondary causes."
+        ]
+      }
+    ],
+    "display_size": "1x"
+  }
+]
+
+
+{
+  "model": "gpt-4o",
+  "messages": [
+    {
+      "role": "system",
+      "content": "Given a freetext admission note below, map the admission note to a following JSON schema and return only a json response. Do not respond with any other comments"
+    },
+    {
+      "role": "user",
+      "content": "Patient Information example"
+    }
+  ],
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "patient_response",
+      "strict": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "last_name": {
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "dob": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "mrn": {
+            "type": "string"
+          },
+          "one_liner": {
+            "type": "string"
+          },
+          "hpi": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          // "todos": {
+          //   "type": "array",
+          //   "items": {
+          //     "type": "object",
+          //     "properties": {
+          //       "description": {
+          //         "type": "string"
+          //       },
+          //       "due_date": {
+          //         "type": ["string", "null"]
+          //       },
+          //       "status": {
+          //         "type": "string",
+          //         "enum": ["OPEN", "CLOSED"]
+          //       }
+          //     },
+          //     "required": ["description", "status", "due_date"],
+          //     "additionalProperties": false
+          //   }
+          // },
+          "assessment_and_plan": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "assessment": {
+                  "type": "string",
+                  "description": "One element of the assessment, e.g. AKI, CHF exacerbation, Hyperkalemia, etc."
+                },
+                "plan": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["assessment", "plan"],
+              "additionalProperties": false
+            }
+          } //,
+          // "display_size": {
+          //   "type": "string",
+          //   "enum": ["1x", "2x", "3x"]
+          // }
+        },
+        "required": [
+          "last_name",
+          "first_name",
+          "dob",
+          "location",
+          "mrn",
+          "one_liner",
+          "hpi",
+          // "todos",
+          "assessment_and_plan"
+          // "display_size"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+},
