@@ -4,6 +4,7 @@ import { AssessmentAndPlanItem, Patient } from "../models/Patient";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -242,6 +243,15 @@ export const GeneratePDF = () => {
                 ? "Edit HPI"
                 : "Edit Details"}
             </DialogTitle>
+            <DialogDescription>
+              {modalContent === "todos"
+                ? "Manage todos for the selected patient."
+                : modalContent === "assessment_and_plan"
+                ? "Update the assessment and plan for the selected patient."
+                : modalContent === "hpi"
+                ? "Edit the history of present illness for the selected patient."
+                : "Edit patient details and information."}
+            </DialogDescription>
           </DialogHeader>
           <ModalContentComponent
             modalContent={modalContent}
@@ -260,6 +270,9 @@ export const GeneratePDF = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Patient</DialogTitle>
+            <DialogDescription>
+              Fill in the patient information to add them to your list.
+            </DialogDescription>
           </DialogHeader>
           <AddPatientForm onSubmit={handleAddPatient} />
         </DialogContent>

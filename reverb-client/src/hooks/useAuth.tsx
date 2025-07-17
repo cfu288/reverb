@@ -1,14 +1,17 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { authApi, ApiError } from '@/services/api';
+import { authApi, ApiError, ApiService } from '@/services/api';
 import { AuthService } from '@/services/authService';
 import { AppRoutes } from '@/routes';
+import { Tenant } from '@/schemas/auth';
 
 interface AuthState {
   isAuthenticated: boolean;
   isInitialized: boolean;
   user: UserData | null;
+  tenants: Tenant[];
+  currentTenant: Tenant | null;
 }
 
 interface UserData {
@@ -36,6 +39,7 @@ interface AuthContextValue extends AuthState {
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
   getAccessToken: () => Promise<string | null>;
+  switchTenant: (tenant: Tenant) => void;
   isLoggingIn: boolean;
   isRegistering: boolean;
   loginError: string | null;
@@ -51,6 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: false,
     isInitialized: false,
     user: null,
+    tenants: [],
+    currentTenant: null,
   });
   const [loginError, setLoginError] = useState<string | null>(null);
   const [registerError, setRegisterError] = useState<string | null>(null);
@@ -65,23 +71,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const idToken = AuthService.getIdToken();
           if (idToken) {
             const decoded = AuthService.decodeToken(idToken);
-            setAuthState({
-              isAuthenticated: true,
-              isInitialized: true,
-              user: {
-                id: decoded.sub,
-                email: decoded.email || '',
-                name: decoded.name || `${decoded.first_name || ''} ${decoded.last_name || ''}`.trim(),
-                username: decoded.username || decoded.email?.split('@')[0] || decoded.name || '',
-                firstName: decoded.first_name || '',
-                lastName: decoded.last_name || '',
-              },
-            });
+            
+            // Fetch tenants for already logged-in user
+            try {
+              const tenants = await authApi.getTenants();
+              const savedTenantId = localStorage.getItem('selected_tenant_id');
+              const currentTenant = tenants.find(t => t.id === Number(savedTenantId)) || tenants[0] || null;
+              
+              setAuthState({
+                isAuthenticated: true,
+                isInitialized: true,
+                user: {
+                  id: decoded.sub,
+                  email: decoded.email || '',
+                  name: decoded.name || `${decoded.first_name || ''} ${decoded.last_name || ''}`.trim(),
+                  username: decoded.username || decoded.email?.split('@')[0] || decoded.name || '',
+                  firstName: decoded.first_name || '',
+                  lastName: decoded.last_name || '',
+                },
+                tenants,
+                currentTenant,
+              });
+              
+              if (currentTenant) {
+                localStorage.setItem('selected_tenant_id', currentTenant.id.toString());
+                localStorage.setItem('current_tenant_url_safe_name', currentTenant.urlSafeName);
+                ApiService.setCurrentTenant(currentTenant.urlSafeName);
+              }
+            } catch (error) {
+              console.error('Failed to fetch tenants during initialization:', error);
+              setAuthState({
+                isAuthenticated: true,
+                isInitialized: true,
+                user: {
+                  id: decoded.sub,
+                  email: decoded.email || '',
+                  name: decoded.name || `${decoded.first_name || ''} ${decoded.last_name || ''}`.trim(),
+                  username: decoded.username || decoded.email?.split('@')[0] || decoded.name || '',
+                  firstName: decoded.first_name || '',
+                  lastName: decoded.last_name || '',
+                },
+                tenants: [],
+                currentTenant: null,
+              });
+            }
           } else {
             setAuthState({
               isAuthenticated: false,
               isInitialized: true,
               user: null,
+              tenants: [],
+              currentTenant: null,
             });
           }
         } else {
@@ -89,6 +129,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isAuthenticated: false,
             isInitialized: true,
             user: null,
+            tenants: [],
+            currentTenant: null,
           });
         }
       } catch (error) {
@@ -97,6 +139,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           isAuthenticated: false,
           isInitialized: true,
           user: null,
+          tenants: [],
+          currentTenant: null,
         });
       }
     };
@@ -112,6 +156,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           isAuthenticated: false,
           isInitialized: true,
           user: null,
+          tenants: [],
+          currentTenant: null,
         });
       }
     };
@@ -135,18 +181,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       const decoded = AuthService.decodeToken(data.id_token);
-      setAuthState({
-        isAuthenticated: true,
-        isInitialized: true,
-        user: {
-          id: decoded.sub,
-          email: decoded.email || '',
-          name: decoded.name || `${decoded.first_name || ''} ${decoded.last_name || ''}`.trim(),
-          username: decoded.username || decoded.email?.split('@')[0] || decoded.name || '',
-          firstName: decoded.first_name || '',
-          lastName: decoded.last_name || '',
-        },
-      });
+      if (!decoded) {
+        console.error('Failed to decode token');
+        throw new Error('Invalid authentication token');
+      }
+      
+      // Fetch user's tenants
+      try {
+        const tenants = await authApi.getTenants();
+        
+        // Get saved tenant preference or use first
+        const savedTenantId = localStorage.getItem('selected_tenant_id');
+        const currentTenant = tenants.find(t => t.id === Number(savedTenantId)) || tenants[0] || null;
+        
+        setAuthState({
+          isAuthenticated: true,
+          isInitialized: true,
+          user: {
+            id: decoded.sub,
+            email: decoded.email || '',
+            name: decoded.name || `${decoded.first_name || ''} ${decoded.last_name || ''}`.trim(),
+            username: decoded.username || decoded.email?.split('@')[0] || decoded.name || '',
+            firstName: decoded.first_name || '',
+            lastName: decoded.last_name || '',
+          },
+          tenants,
+          currentTenant,
+        });
+        
+        if (currentTenant) {
+          localStorage.setItem('selected_tenant_id', currentTenant.id.toString());
+          localStorage.setItem('current_tenant_url_safe_name', currentTenant.urlSafeName);
+          ApiService.setCurrentTenant(currentTenant.urlSafeName);
+        }
+      } catch (error) {
+        console.error('Failed to fetch tenants:', error);
+        // Still log the user in but with no tenants
+        setAuthState({
+          isAuthenticated: true,
+          isInitialized: true,
+          user: {
+            id: decoded.sub,
+            email: decoded.email || '',
+            name: decoded.name || `${decoded.first_name || ''} ${decoded.last_name || ''}`.trim(),
+            username: decoded.username || decoded.email?.split('@')[0] || decoded.name || '',
+            firstName: decoded.first_name || '',
+            lastName: decoded.last_name || '',
+          },
+          tenants: [],
+          currentTenant: null,
+        });
+      }
 
       setLoginError(null);
       queryClient.invalidateQueries({ queryKey: ['user'] });
@@ -185,18 +270,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       const decoded = AuthService.decodeToken(tokens.id_token);
-      setAuthState({
-        isAuthenticated: true,
-        isInitialized: true,
-        user: {
-          id: decoded.sub,
-          email: decoded.email,
-          name: decoded.name || `${decoded.first_name || ''} ${decoded.last_name || ''}`.trim(),
-          username: decoded.username || decoded.email.split('@')[0],
-          firstName: decoded.first_name || '',
-          lastName: decoded.last_name || '',
-        },
-      });
+      if (!decoded) {
+        console.error('Failed to decode token');
+        throw new Error('Invalid authentication token');
+      }
+      
+      // Fetch user's tenants
+      try {
+        const tenants = await authApi.getTenants();
+        const currentTenant = tenants[0] || null;
+        
+        setAuthState({
+          isAuthenticated: true,
+          isInitialized: true,
+          user: {
+            id: decoded.sub,
+            email: decoded.email,
+            name: decoded.name || `${decoded.first_name || ''} ${decoded.last_name || ''}`.trim(),
+            username: decoded.username || decoded.email.split('@')[0],
+            firstName: decoded.first_name || '',
+            lastName: decoded.last_name || '',
+          },
+          tenants,
+          currentTenant,
+        });
+        
+        if (currentTenant) {
+          localStorage.setItem('selected_tenant_id', currentTenant.id.toString());
+          localStorage.setItem('current_tenant_url_safe_name', currentTenant.urlSafeName);
+          ApiService.setCurrentTenant(currentTenant.urlSafeName);
+        }
+      } catch (error) {
+        console.error('Failed to fetch tenants:', error);
+        // Still log the user in but with no tenants
+        setAuthState({
+          isAuthenticated: true,
+          isInitialized: true,
+          user: {
+            id: decoded.sub,
+            email: decoded.email,
+            name: decoded.name || `${decoded.first_name || ''} ${decoded.last_name || ''}`.trim(),
+            username: decoded.username || decoded.email.split('@')[0],
+            firstName: decoded.first_name || '',
+            lastName: decoded.last_name || '',
+          },
+          tenants: [],
+          currentTenant: null,
+        });
+      }
 
       setRegisterError(null);
       queryClient.invalidateQueries({ queryKey: ['user'] });
@@ -230,14 +351,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     AuthService.clearTokens();
+    localStorage.removeItem('selected_tenant_id');
+    localStorage.removeItem('current_tenant_url_safe_name');
+    ApiService.setCurrentTenant(null);
     setAuthState({
       isAuthenticated: false,
       isInitialized: true,
       user: null,
+      tenants: [],
+      currentTenant: null,
     });
     queryClient.clear();
     navigate(AppRoutes.LOGIN);
   }, [navigate, queryClient]);
+
+  const switchTenant = useCallback((tenant: Tenant) => {
+    localStorage.setItem('selected_tenant_id', tenant.id.toString());
+    localStorage.setItem('current_tenant_url_safe_name', tenant.urlSafeName);
+    ApiService.setCurrentTenant(tenant.urlSafeName);
+    setAuthState(prev => ({ ...prev, currentTenant: tenant }));
+    // Clear cached data when switching tenants
+    queryClient.clear();
+  }, [queryClient]);
 
 
   const getAccessToken = useCallback(async (): Promise<string | null> => {
@@ -250,6 +385,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     register,
     logout,
     getAccessToken,
+    switchTenant,
     isLoggingIn: loginMutation.isPending,
     isRegistering: registerMutation.isPending,
     loginError,

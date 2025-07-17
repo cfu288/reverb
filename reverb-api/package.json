@@ -102,5 +102,11 @@
       "strtok3": "8.0.1"
     }
   },
-  "prettier": "@adonisjs/prettier-config"
+  "prettier": "@adonisjs/prettier-config",
+  "description": "## Development Database Setup",
+  "main": "ace.js",
+  "directories": {
+    "test": "tests"
+  },
+  "author": ""
 }

@@ -3,6 +3,7 @@ import { GalleryVerticalEnd, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -313,6 +314,9 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create New List</DialogTitle>
+            <DialogDescription>
+              Enter a name for your new patient list.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <Input

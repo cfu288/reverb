@@ -364,6 +364,12 @@ export class JwtGuard<UserProvider extends JwtUserProviderContract<unknown>>
   }
 
   private async verifyFingerprint(tokenFingerprint: string): Promise<void> {
+    // Skip fingerprint validation in development mode
+    if (env.get('NODE_ENV') === 'development') {
+      console.log('Skipping fingerprint validation in development mode')
+      return
+    }
+
     // Get the fingerprint from the cookie
     const fingerprint = this.ctx.request.cookie('fingerprint')
     if (!fingerprint) {

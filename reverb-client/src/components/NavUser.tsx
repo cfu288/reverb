@@ -1,7 +1,9 @@
+import { useState, useEffect } from "react"
 import {
   LogOut,
   MoreVertical,
   UserCircle,
+  Building2,
 } from "lucide-react"
 
 import {
@@ -26,11 +28,19 @@ import {
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/hooks/useAuth"
 import { useNavigate } from "react-router-dom"
+import { useTenantSwitcher } from "@/contexts/TenantSwitcherContext"
 
 export function NavUser() {
   const { isMobile } = useSidebar()
-  const { user, logout } = useAuth()
+  const { user, logout, currentTenant, tenants } = useAuth()
   const navigate = useNavigate()
+  const { openTenantSwitcher } = useTenantSwitcher()
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+
+  // Close dropdown when sidebar state changes to prevent aria-hidden conflicts
+  useEffect(() => {
+    setDropdownOpen(false)
+  }, [isMobile])
 
   if (!user) return null
 
@@ -52,9 +62,10 @@ export function NavUser() {
   const displayName = user.name || `${user.firstName} ${user.lastName}`.trim() || user.username
 
   return (
+    <>
     <SidebarMenu>
       <SidebarMenuItem>
-        <DropdownMenu>
+        <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
@@ -97,13 +108,35 @@ export function NavUser() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => navigate('/account')}>
+              <DropdownMenuItem onClick={() => {
+                setDropdownOpen(false)
+                navigate('/account')
+              }}>
                 <UserCircle className="mr-2 h-4 w-4" />
                 Account
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => {
+                setDropdownOpen(false)
+                openTenantSwitcher()
+              }}>
+                <Building2 className="mr-2 h-4 w-4" />
+                Switch Organization
+                {currentTenant ? (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {currentTenant.displayName}
+                  </span>
+                ) : (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {tenants?.length || 0} orgs
+                  </span>
+                )}
+              </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout}>
+            <DropdownMenuItem onClick={() => {
+              setDropdownOpen(false)
+              logout()
+            }}>
               <LogOut className="mr-2 h-4 w-4" />
               Log out
             </DropdownMenuItem>
@@ -111,5 +144,6 @@ export function NavUser() {
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
+    </>
   )
 }

@@ -1,4 +1,6 @@
 import { AuthService } from "@/services/authService";
+import { TenantsArraySchema } from "@/schemas/auth";
+import { ZodError } from "zod";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3333";
 
@@ -74,6 +76,19 @@ export async function fetchWithAuth<T = any>(
   }
 }
 
+// Helper function to handle Zod validation with better error messages
+function validateWithSchema<T>(schema: { parse: (data: unknown) => T }, data: unknown, context: string): T {
+  try {
+    return schema.parse(data);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      console.error(`Validation error in ${context}:`, error.errors);
+      throw new ApiError(500, `Invalid response format from server in ${context}`, error.errors);
+    }
+    throw error;
+  }
+}
+
 // Auth-specific API functions
 export const authApi = {
   login: async (credentials: { email: string; password: string }) => {
@@ -123,5 +138,90 @@ export const authApi = {
       skipAuth: true,
     });
   },
+
+  getTenants: async () => {
+    const response = await fetchWithAuth("/api/v1/org", {
+      method: "GET",
+    });
+    return validateWithSchema(TenantsArraySchema, response, 'getTenants');
+  },
+
 };
+
+// Main API service with tenant context
+export class ApiService {
+  private static currentTenant: string | null = null;
+
+  static setCurrentTenant(tenantUrlSafeName: string | null) {
+    this.currentTenant = tenantUrlSafeName;
+  }
+
+  private static getTenant(): string | null {
+    // Use the set tenant or fall back to localStorage
+    return this.currentTenant || localStorage.getItem('current_tenant_url_safe_name');
+  }
+
+  private static async request<T = any>(
+    method: string,
+    path: string,
+    options?: Omit<FetchOptions, 'method'>
+  ): Promise<T> {
+    const tenant = this.getTenant();
+    if (!tenant && !path.startsWith('/user') && !path.startsWith('/api/v1/org')) {
+      throw new ApiError(0, "No tenant selected");
+    }
+    
+    // Add tenant context to path if needed
+    const fullPath = path.startsWith('/api/v1/org/') 
+      ? path 
+      : tenant && !path.startsWith('/user') && !path.startsWith('/api/v1/org')
+        ? `/api/v1/org/${tenant}${path}`
+        : path;
+    
+    return fetchWithAuth<T>(fullPath, {
+      ...options,
+      method,
+    });
+  }
+
+  static async getPatientLists() {
+    return this.request('GET', '/patient-list');
+  }
+
+  static async getPatientList(urlSafeName: string) {
+    return this.request('GET', `/patient-list/${urlSafeName}`);
+  }
+
+  static async createPatientList(data: { display_name: string; url_safe_name: string }) {
+    return this.request('POST', '/patient-list', {
+      body: JSON.stringify(data),
+    });
+  }
+
+  static async deletePatientList(urlSafeName: string) {
+    return this.request('DELETE', `/patient-list/${urlSafeName}`);
+  }
+
+  static async getPatient(id: string) {
+    return this.request('GET', `/patient/${id}`);
+  }
+
+  static async createPatient(listUrlSafeName: string, data: any) {
+    return this.request('POST', `/patient-list/${listUrlSafeName}/patient`, {
+      body: JSON.stringify(data),
+    });
+  }
+
+  static async updatePatient(id: string, data: any) {
+    return this.request('PUT', `/patient/${id}`, {
+      body: JSON.stringify(data),
+    });
+  }
+
+  static async deletePatient(id: string) {
+    return this.request('DELETE', `/patient/${id}`);
+  }
+}
+
+export const api = ApiService;
 
