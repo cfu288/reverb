@@ -185,21 +185,21 @@ export class ApiService {
   }
 
   static async getPatientLists() {
-    return this.request('GET', '/patient-list');
+    return this.request('GET', '/patient-lists');
   }
 
   static async getPatientList(urlSafeName: string) {
-    return this.request('GET', `/patient-list/${urlSafeName}`);
+    return this.request('GET', `/patient-lists/${urlSafeName}`);
   }
 
   static async createPatientList(data: { display_name: string; url_safe_name: string }) {
-    return this.request('POST', '/patient-list', {
+    return this.request('POST', '/patient-lists', {
       body: JSON.stringify(data),
     });
   }
 
   static async deletePatientList(urlSafeName: string) {
-    return this.request('DELETE', `/patient-list/${urlSafeName}`);
+    return this.request('DELETE', `/patient-lists/${urlSafeName}`);
   }
 
   static async getPatient(id: string) {
@@ -207,7 +207,7 @@ export class ApiService {
   }
 
   static async createPatient(listUrlSafeName: string, data: any) {
-    return this.request('POST', `/patient-list/${listUrlSafeName}/patient`, {
+    return this.request('POST', `/patient-lists/${listUrlSafeName}/patients`, {
       body: JSON.stringify(data),
     });
   }
@@ -220,6 +220,29 @@ export class ApiService {
 
   static async deletePatient(id: string) {
     return this.request('DELETE', `/patient/${id}`);
+  }
+
+  // Generic HTTP methods
+  static async get<T = any>(path: string, options?: Omit<FetchOptions, 'method'>): Promise<T> {
+    return this.request<T>('GET', path, options);
+  }
+
+  static async post<T = any>(path: string, data?: any, options?: Omit<FetchOptions, 'method' | 'body'>): Promise<T> {
+    return this.request<T>('POST', path, {
+      ...options,
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  static async put<T = any>(path: string, data?: any, options?: Omit<FetchOptions, 'method' | 'body'>): Promise<T> {
+    return this.request<T>('PUT', path, {
+      ...options,
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  static async delete<T = any>(path: string, options?: Omit<FetchOptions, 'method'>): Promise<T> {
+    return this.request<T>('DELETE', path, options);
   }
 }
 

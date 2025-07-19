@@ -243,4 +243,16 @@ export default class PatientListPolicy extends BasePolicy {
         permission.name === 'PatientList.Write' || permission.name === 'PatientList.Write.All'
     )
   }
+
+  /**
+   * Determines if a user can update a patient list (including CRDT operations).
+   * Uses the same logic as managePatients.
+   *
+   * @param user - The user attempting to update the list
+   * @param patientList - The patient list being updated
+   * @returns true if the user has appropriate access
+   */
+  async update(user: User, patientList: PatientList) {
+    return this.managePatients(user, patientList)
+  }
 }

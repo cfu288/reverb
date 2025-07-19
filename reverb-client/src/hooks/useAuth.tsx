@@ -37,7 +37,7 @@ interface RegisterData extends LoginCredentials {
 interface AuthContextValue extends AuthState {
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   getAccessToken: () => Promise<string | null>;
   switchTenant: (tenant: Tenant) => void;
   isLoggingIn: boolean;
@@ -64,8 +64,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Initialize auth state from stored tokens
   useEffect(() => {
     const initializeAuth = async () => {
+      console.log('[useAuth] Initializing auth state');
+      
+      // Ensure AuthService is initialized for all tabs (even non-authenticated ones)
+      // This sets up the BroadcastChannel listeners
+      await AuthService.ensureInitialized();
+      
       try {
         const isAuthenticated = AuthService.isAuthenticated();
+        console.log('[useAuth] Auth check result:', isAuthenticated);
         
         if (isAuthenticated) {
           const idToken = AuthService.getIdToken();
@@ -149,9 +156,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth state changes from other tabs
     const handleAuthStateChange = (event: CustomEvent<{ isAuthenticated: boolean }>) => {
+      console.log('[useAuth] Received auth state change event:', event.detail);
       if (event.detail.isAuthenticated && !authState.isAuthenticated) {
+        console.log('[useAuth] Another tab logged in, reinitializing auth');
         initializeAuth();
       } else if (!event.detail.isAuthenticated && authState.isAuthenticated) {
+        console.log('[useAuth] Another tab logged out, clearing auth state');
         setAuthState({
           isAuthenticated: false,
           isInitialized: true,
@@ -162,17 +172,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
+    // Listen for logout required events (from token refresh failures or cross-tab logout)
+    const handleLogoutRequired = () => {
+      console.log('[useAuth] Logout required, navigating to login');
+      setAuthState({
+        isAuthenticated: false,
+        isInitialized: true,
+        user: null,
+        tenants: [],
+        currentTenant: null,
+      });
+      queryClient.clear();
+      navigate(AppRoutes.LOGIN);
+    };
+
     window.addEventListener('auth-state-changed', handleAuthStateChange as EventListener);
+    window.addEventListener('auth-logout-required', handleLogoutRequired);
     
     return () => {
       window.removeEventListener('auth-state-changed', handleAuthStateChange as EventListener);
+      window.removeEventListener('auth-logout-required', handleLogoutRequired);
     };
-  }, []);
+  }, [navigate, queryClient]);
 
   // Login mutation
   const loginMutation = useMutation({
     mutationFn: authApi.login,
     onSuccess: async (data) => {
+      console.log('[useAuth] Login successful, saving tokens');
       await AuthService.saveTokens({
         access_token: data.access_token,
         refresh_token: data.refresh_token,
@@ -235,6 +262,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setLoginError(null);
       queryClient.invalidateQueries({ queryKey: ['user'] });
+      console.log('[useAuth] Login complete, auth state updated');
     },
     onError: (error) => {
       if (error instanceof ApiError) {
@@ -349,8 +377,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await registerMutation.mutateAsync(data);
   }, [registerMutation]);
 
-  const logout = useCallback(() => {
-    AuthService.clearTokens();
+  const logout = useCallback(async () => {
+    console.log('[useAuth] Logging out');
+    await AuthService.clearTokens();
     localStorage.removeItem('selected_tenant_id');
     localStorage.removeItem('current_tenant_url_safe_name');
     ApiService.setCurrentTenant(null);
@@ -363,6 +392,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     queryClient.clear();
     navigate(AppRoutes.LOGIN);
+    console.log('[useAuth] Logout complete');
   }, [navigate, queryClient]);
 
   const switchTenant = useCallback((tenant: Tenant) => {

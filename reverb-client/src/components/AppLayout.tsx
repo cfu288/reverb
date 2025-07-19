@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { TenantSwitcherProvider, useTenantSwitcher } from "@/contexts/TenantSwitcherContext";
 import { TenantSwitcherModal } from "@/components/TenantSwitcherModal";
+import { WebSocketStatus } from "@/components/WebSocketStatus";
 
 interface AppLayoutProps {
   children?: ReactNode;
@@ -30,6 +31,7 @@ function AppLayoutContent({ children }: AppLayoutProps) {
           if (!open) closeTenantSwitcher();
         }}
       />
+      <WebSocketStatus />
     </>
   );
 }

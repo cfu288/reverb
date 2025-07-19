@@ -1,27 +1,34 @@
-import { AuthBroadcast } from "./authBroadcast";
-
-interface StoredTokens {
-  accessToken: string;
-  refreshToken: string;
-  idToken: string;
-  expiresAt: number; // Timestamp when access token expires
-}
+import { AuthBroadcast, type StoredTokens } from "./authBroadcast";
 
 export class AuthService {
   private static readonly TOKEN_KEY = "auth_tokens";
   private static refreshPromise: Promise<string | null> | null = null;
-  private static broadcast: any = null;
+  private static broadcast: AuthBroadcast | null = null;
   private static initialized = false;
 
   /**
    * Initialize the auth service with broadcast support (called automatically)
    */
-  private static async ensureInitialized() {
-    if (this.initialized) return;
+  static async ensureInitialized() {
+    if (this.initialized) {
+      console.log('[AuthService] Already initialized');
+      return;
+    }
 
+    console.log('[AuthService] Initializing with broadcast support');
     this.initialized = true;
     this.broadcast = AuthBroadcast.getInstance();
+    
+    // Set up callbacks to avoid circular dependency
+    this.broadcast.setAuthCallbacks({
+      isAuthenticated: () => this.isAuthenticated(),
+      getStoredTokens: () => this.getStoredTokens(),
+      restoreTokens: (tokens) => this.restoreTokens(tokens),
+      clearTokens: (isLocalLogout) => this.clearTokens(isLocalLogout),
+    });
+    
     await this.broadcast.initialize();
+    console.log('[AuthService] Initialization complete');
   }
 
   /**
@@ -33,6 +40,7 @@ export class AuthService {
     id_token: string;
     expires_in: number;
   }): Promise<void> {
+    console.log('[AuthService] Saving tokens, expires_in:', tokens.expires_in);
     await this.ensureInitialized();
 
     const tokenData: StoredTokens = {
@@ -43,17 +51,29 @@ export class AuthService {
     };
 
     sessionStorage.setItem(this.TOKEN_KEY, JSON.stringify(tokenData));
+    console.log('[AuthService] Tokens saved to sessionStorage');
 
-    // Notify other tabs
-    this.broadcast?.notifyAuthStateChange(true);
+    // Notify other tabs about login
+    console.log('[AuthService] Notifying other tabs about login');
+    if (this.broadcast) {
+      console.log('[AuthService] Broadcast is available, sending LOGIN_SUCCESS');
+      this.broadcast.notifyLoginSuccess(tokenData);
+      this.broadcast.notifyAuthStateChange(true);
+    } else {
+      console.error('[AuthService] Broadcast is null! Cannot notify other tabs');
+    }
   }
 
   /**
    * Restore tokens from another tab (used by BroadcastChannel)
    */
   static restoreTokens(tokenData: StoredTokens): void {
+    console.log('[AuthService] Restoring tokens from another tab');
     if (tokenData && tokenData.expiresAt > Date.now()) {
       sessionStorage.setItem(this.TOKEN_KEY, JSON.stringify(tokenData));
+      console.log('[AuthService] Tokens restored successfully');
+    } else {
+      console.log('[AuthService] Tokens invalid or expired, not restoring');
     }
   }
 
@@ -82,12 +102,15 @@ export class AuthService {
 
     // Check if token is expired or about to expire
     if (Date.now() >= tokens.expiresAt) {
+      console.log('[AuthService] Token expired, refreshing...');
       // Use existing refresh promise if one is in progress
       if (this.refreshPromise) {
+        console.log('[AuthService] Using existing refresh promise');
         return this.refreshPromise;
       }
 
       // Start new refresh
+      console.log('[AuthService] Starting new token refresh');
       this.refreshPromise = this.refreshAccessToken();
       try {
         const newToken = await this.refreshPromise;
@@ -97,6 +120,8 @@ export class AuthService {
       }
     }
 
+    console.log('[AuthService] Returning existing token, expires in:', 
+      Math.round((tokens.expiresAt - Date.now()) / 1000), 'seconds');
     return tokens.accessToken;
   }
 
@@ -157,15 +182,15 @@ export class AuthService {
 
       sessionStorage.setItem(this.TOKEN_KEY, JSON.stringify(newTokenData));
 
-      // Notify other tabs about the refresh
-      this.broadcast?.notifyTokenRefresh(newTokenData.expiresAt);
+      // Notify other tabs about the refresh with full token data
+      this.broadcast?.notifyTokenRefresh(newTokenData);
 
       return data.access_token;
     } catch (error) {
       console.error("Token refresh failed:", error);
-      this.clearTokens();
-      // Redirect to login
-      window.location.href = "/login";
+      await this.clearTokens();
+      // Dispatch event for soft navigation instead of hard redirect
+      window.dispatchEvent(new CustomEvent('auth-logout-required'));
       return null;
     }
   }
@@ -175,16 +200,31 @@ export class AuthService {
    */
   static isAuthenticated(): boolean {
     const tokens = this.getStoredTokens();
-    return !!(tokens?.accessToken && tokens?.refreshToken);
+    const isAuth = !!(tokens?.accessToken && tokens?.refreshToken);
+    return isAuth;
   }
 
   /**
    * Clear all tokens
+   * @param isLocalLogout - true if this is initiated by the current tab, false if from another tab
    */
-  static clearTokens(): void {
+  static async clearTokens(isLocalLogout: boolean = true): Promise<void> {
+    console.log('[AuthService] Clearing tokens, isLocalLogout:', isLocalLogout);
     sessionStorage.removeItem(this.TOKEN_KEY);
-    // Notify other tabs about logout
-    this.broadcast?.notifyLogout();
+    
+    // Only notify other tabs if this is a local logout (not triggered by another tab)
+    if (isLocalLogout) {
+      // Ensure broadcast is initialized
+      await this.ensureInitialized();
+      
+      // Notify other tabs about logout
+      console.log('[AuthService] Notifying other tabs about logout');
+      if (this.broadcast) {
+        this.broadcast.notifyLogout();
+      } else {
+        console.error('[AuthService] Broadcast is null during logout!');
+      }
+    }
   }
 
   /**

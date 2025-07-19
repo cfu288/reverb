@@ -24,6 +24,12 @@ export default class PatientList extends BaseModel {
   @column()
   declare createdByUserId: number
 
+  @column()
+  declare crdtDocument: Buffer | null
+
+  @column()
+  declare crdtVersion: number
+
   @belongsTo(() => Tenant)
   declare tenant: BelongsTo<typeof Tenant>
 

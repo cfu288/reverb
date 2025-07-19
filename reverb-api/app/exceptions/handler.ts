@@ -54,8 +54,10 @@ export default class HttpExceptionHandler extends ExceptionHandler {
     return {
       url: ctx.request.url(),
       method: ctx.request.method(),
-      userId: ctx.auth.user?.id,
+      userId: ctx.auth?.user?.id,
       requestId: ctx.request.id(),
+      ip: ctx.request.ip(),
+      userAgent: ctx.request.header('user-agent'),
     }
   }
 

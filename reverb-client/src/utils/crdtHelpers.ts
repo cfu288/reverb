@@ -1,0 +1,476 @@
+import { Model } from 'json-joy/lib/json-crdt/model/Model';
+import type { Patient } from '@/models/Patient';
+
+/**
+ * CRDT Helper utilities for common operations on patient lists
+ */
+
+export class CRDTHelpers {
+  /**
+   * Validate patient index
+   */
+  private static validatePatientIndex(api: any, patientIndex: number): void {
+    if (patientIndex < 0) {
+      throw new Error('Invalid patient index: must be non-negative');
+    }
+    
+    const patientsArray = api.arr(['patients']);
+    if (patientIndex >= patientsArray.length()) {
+      throw new Error(`Patient index ${patientIndex} out of bounds`);
+    }
+  }
+
+  /**
+   * Add a new patient to the list
+   */
+  static addPatient(api: any, patient: {
+    id?: string;
+    mrn: string;
+    dob: string;
+    first_name?: string;
+    last_name?: string;
+    location?: string;
+    one_liner?: string;
+    hpi?: string;
+    todos?: any[];
+    labs?: any[];
+    vitals?: any[];
+    meds?: any[];
+    assessment_and_plan?: any[];
+  }) {
+    if (!patient.mrn || patient.mrn.trim() === '') {
+      throw new Error('Patient MRN is required');
+    }
+    
+    if (!patient.dob || patient.dob.trim() === '') {
+      throw new Error('Patient date of birth is required');
+    }
+    
+    const patientId = patient.id || crypto.randomUUID();
+    const patientsArray = api.arr(['patients']);
+    
+    patientsArray.ins(patientsArray.length(), [{
+      id: patientId,
+      mrn: patient.mrn,
+      dob: patient.dob,
+      first_name: patient.first_name || '',
+      last_name: patient.last_name || '',
+      location: patient.location || '',
+      one_liner: patient.one_liner || '',
+      hpi: patient.hpi || '',
+      todos: patient.todos || [],
+      labs: patient.labs || [],
+      vitals: patient.vitals || [],
+      meds: patient.meds || [],
+      assessment_and_plan: patient.assessment_and_plan || [],
+    }]);
+    
+    return patientId;
+  }
+
+  /**
+   * Update a patient field
+   */
+  static updatePatientField(
+    api: any,
+    patientIndex: number,
+    field: string,
+    value: any
+  ) {
+    this.validatePatientIndex(api, patientIndex);
+    
+    if (!field || field.trim() === '') {
+      throw new Error('Field name cannot be empty');
+    }
+    
+    console.log('[CRDTHelpers] updatePatientField:', { patientIndex, field, value });
+    
+    // First, let's check if the patient exists at this index
+    const patientsArray = api.arr(['patients']);
+    console.log('[CRDTHelpers] Patients array length:', patientsArray.length());
+    
+    // Get the patient object
+    console.log('[CRDTHelpers] Getting patient object at path:', JSON.stringify(['patients', patientIndex]));
+    const patient = api.obj(['patients', patientIndex]);
+    console.log('[CRDTHelpers] Got patient object:', !!patient);
+    console.log('[CRDTHelpers] Patient object is:', patient);
+    
+    // Get the full patient data to debug
+    const patientView = patient.view();
+    console.log('[CRDTHelpers] Patient data before update:', JSON.stringify(patientView, null, 2));
+    
+    // Try to access the field directly from the view
+    try {
+      const currentFieldValue = patientView[field];
+      console.log('[CRDTHelpers] Current field value from view:', field, '=', currentFieldValue);
+    } catch (e) {
+      console.log('[CRDTHelpers] Error accessing field from view:', e);
+    }
+    
+    // Perform the update
+    try {
+      console.log('[CRDTHelpers] About to set field:', field, 'to value:', value);
+      console.log('[CRDTHelpers] Patient object type:', patient.constructor.name);
+      console.log('[CRDTHelpers] Patient object methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(patient)));
+      
+      // Log what we're trying to create
+      console.log('[CRDTHelpers] Creating node for value:', JSON.stringify({ value, type: typeof value }));
+      
+      // Check if api.builder has specific methods
+      console.log('[CRDTHelpers] Api.builder methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(api.builder)));
+      
+      // The set() method expects the raw value, not a builder result
+      // It will internally call builder.constOrJson() on the value
+      console.log('[CRDTHelpers] Calling patient.set with field:', field, 'and value:', value);
+      patient.set({[field]: value});
+      console.log('[CRDTHelpers] Set operation completed successfully');
+      
+      // Verify the update
+      const verifyPatient = api.obj(['patients', patientIndex]);
+      const verifyView = verifyPatient.view();
+      console.log('[CRDTHelpers] Verification - field value after set:', verifyView[field]);
+    } catch (e) {
+      console.error('[CRDTHelpers] Error during set operation:', e);
+      throw e;
+    }
+    
+    // Get the patient view again to see if it changed
+    const patientViewAfter = patient.view();
+    console.log('[CRDTHelpers] Patient data after update:', JSON.stringify(patientViewAfter, null, 2));
+    
+    console.log('[CRDTHelpers] Set complete');
+  }
+
+  /**
+   * Add a todo to a patient
+   */
+  static addTodo(
+    api: any,
+    patientIndex: number,
+    todo: {
+      description: string;
+      due_date?: string;
+      status?: 'OPEN' | 'CLOSED';
+    }
+  ) {
+    if (patientIndex < 0) {
+      throw new Error('Invalid patient index: must be non-negative');
+    }
+    
+    const patientsArray = api.arr(['patients']);
+    if (patientIndex >= patientsArray.length()) {
+      throw new Error(`Patient index ${patientIndex} out of bounds`);
+    }
+    
+    if (!todo.description || todo.description.trim() === '') {
+      throw new Error('Todo description cannot be empty');
+    }
+    
+    const todoId = crypto.randomUUID();
+    const todosArray = api.arr(['patients', patientIndex, 'todos']);
+    
+    todosArray.ins(todosArray.length(), [{
+      id: todoId,
+      description: todo.description,
+      due_date: todo.due_date || '',
+      status: todo.status || 'OPEN',
+    }]);
+    
+    return todoId;
+  }
+
+  /**
+   * Toggle todo status
+   */
+  static toggleTodoStatus(
+    api: any,
+    patientIndex: number,
+    todoIndex: number
+  ) {
+    if (patientIndex < 0 || todoIndex < 0) {
+      throw new Error('Invalid index: indices must be non-negative');
+    }
+    
+    const patientsArray = api.arr(['patients']);
+    if (patientIndex >= patientsArray.length()) {
+      throw new Error(`Patient index ${patientIndex} out of bounds`);
+    }
+    
+    const todosArray = api.arr(['patients', patientIndex, 'todos']);
+    if (todoIndex >= todosArray.length()) {
+      throw new Error(`Todo index ${todoIndex} out of bounds`);
+    }
+    
+    const todo = api.obj(['patients', patientIndex, 'todos', todoIndex]);
+    const currentStatus = todo.get(['status'])?.val;
+    const statusValue = currentStatus === 'OPEN' ? 'CLOSED' : 'OPEN';
+    todo.set({status: statusValue});
+  }
+
+  /**
+   * Remove a todo
+   */
+  static removeTodo(
+    api: any,
+    patientIndex: number,
+    todoIndex: number
+  ) {
+    if (patientIndex < 0 || todoIndex < 0) {
+      throw new Error('Invalid index: indices must be non-negative');
+    }
+    
+    const patientsArray = api.arr(['patients']);
+    if (patientIndex >= patientsArray.length()) {
+      throw new Error(`Patient index ${patientIndex} out of bounds`);
+    }
+    
+    const todosArray = api.arr(['patients', patientIndex, 'todos']);
+    if (todoIndex >= todosArray.length()) {
+      throw new Error(`Todo index ${todoIndex} out of bounds`);
+    }
+    
+    todosArray.del(todoIndex, 1);
+  }
+
+  /**
+   * Update todo field
+   */
+  static updateTodo(
+    api: any,
+    patientIndex: number,
+    todoIndex: number,
+    field: string,
+    value: string
+  ) {
+    if (patientIndex < 0 || todoIndex < 0) {
+      throw new Error('Invalid index: indices must be non-negative');
+    }
+    
+    const patientsArray = api.arr(['patients']);
+    if (patientIndex >= patientsArray.length()) {
+      throw new Error(`Patient index ${patientIndex} out of bounds`);
+    }
+    
+    const todosArray = api.arr(['patients', patientIndex, 'todos']);
+    if (todoIndex >= todosArray.length()) {
+      throw new Error(`Todo index ${todoIndex} out of bounds`);
+    }
+    
+    // Set the new value
+    api.obj(['patients', patientIndex, 'todos', todoIndex]).set({[field]: value});
+  }
+
+  /**
+   * Add a lab result
+   */
+  static addLab(
+    api: any,
+    patientIndex: number,
+    lab: {
+      display_name: string;
+      units: string;
+      display_value: string;
+      effective_datetime: string;
+      value_number?: number;
+      value_string?: string;
+      reference_range?: any;
+    }
+  ) {
+    const labId = crypto.randomUUID();
+    const labsArray = api.arr(['patients', patientIndex, 'labs']);
+    
+    labsArray.ins(labsArray.length(), [{
+      id: labId,
+      display_name: lab.display_name,
+      units: lab.units,
+      display_value: lab.display_value,
+      effective_datetime: lab.effective_datetime,
+      value_number: lab.value_number,
+      value_string: lab.value_string,
+      reference_range: lab.reference_range,
+      identifiers: [],
+    }]);
+    
+    return labId;
+  }
+
+  /**
+   * Add a vital sign
+   */
+  static addVital(
+    api: any,
+    patientIndex: number,
+    vital: {
+      display_name: string;
+      units: string;
+      display_value: string;
+      effective_datetime: string;
+      value_number?: number;
+      value_string?: string;
+      reference_range?: any;
+    }
+  ) {
+    const vitalId = crypto.randomUUID();
+    const vitalsArray = api.arr(['patients', patientIndex, 'vitals']);
+    
+    vitalsArray.ins(vitalsArray.length(), [{
+      id: vitalId,
+      display_name: vital.display_name,
+      units: vital.units,
+      display_value: vital.display_value,
+      effective_datetime: vital.effective_datetime,
+      value_number: vital.value_number,
+      value_string: vital.value_string,
+      reference_range: vital.reference_range,
+      identifiers: [],
+    }]);
+    
+    return vitalId;
+  }
+
+  /**
+   * Add a medication
+   */
+  static addMed(
+    api: any,
+    patientIndex: number,
+    med: {
+      name: string;
+      route: string;
+      frequency: string;
+      dose: string | number;
+      unit: string;
+    }
+  ) {
+    const medId = crypto.randomUUID();
+    const medsArray = api.arr(['patients', patientIndex, 'meds']);
+    
+    medsArray.ins(medsArray.length(), [{
+      id: medId,
+      name: med.name,
+      route: med.route,
+      frequency: med.frequency,
+      dose: med.dose,
+      unit: med.unit,
+    }]);
+    
+    return medId;
+  }
+
+  /**
+   * Add assessment and plan item
+   */
+  static addAssessmentPlan(
+    api: any,
+    patientIndex: number,
+    item: {
+      assessment: string;
+      plan: string[];
+      category?: string;
+    }
+  ) {
+    const itemId = crypto.randomUUID();
+    const apArray = api.arr(['patients', patientIndex, 'assessment_and_plan']);
+    
+    apArray.ins(apArray.length(), [{
+      id: itemId,
+      assessment: item.assessment,
+      plan: item.plan,
+      category: item.category || '',
+    }]);
+    
+    return itemId;
+  }
+
+  /**
+   * Remove a patient
+   */
+  static removePatient(api: any, patientIndex: number) {
+    this.validatePatientIndex(api, patientIndex);
+    
+    const patientsArray = api.arr(['patients']);
+    patientsArray.del(patientIndex, 1);
+  }
+
+  /**
+   * Update list metadata
+   */
+  static updateListMetadata(
+    api: any,
+    field: 'name' | 'display_template_id',
+    value: string
+  ) {
+    api.obj([]).set({[field]: value});
+    const dateStr = new Date().toISOString();
+    api.obj([]).set({updated_at: dateStr});
+  }
+
+  /**
+   * Find patient index by ID
+   */
+  static findPatientIndex(model: Model<any>, patientId: string): number {
+    const patients = (model.view() as any).patients;
+    if (!Array.isArray(patients)) return -1;
+    
+    return patients.findIndex((p: any) => p.id === patientId);
+  }
+
+  /**
+   * Find todo index by ID
+   */
+  static findTodoIndex(model: Model<any>, patientIndex: number, todoId: string): number {
+    const todos = (model.view() as any).patients?.[patientIndex]?.todos;
+    if (!Array.isArray(todos)) return -1;
+    
+    return todos.findIndex((t: any) => t.id === todoId);
+  }
+
+  /**
+   * Get all patients from the model
+   */
+  static getPatients(model: Model<any>): Patient[] {
+    const view = model.view();
+    return (view as any).patients || [];
+  }
+
+  /**
+   * Update assessment and plan
+   */
+  static updateAssessmentAndPlan(
+    api: any,
+    patientIndex: number,
+    assessmentIndex: number,
+    field: 'assessment' | 'plan',
+    value: string,
+    planIndex?: number
+  ): void {
+    if (patientIndex < 0 || assessmentIndex < 0) {
+      throw new Error('Invalid index: indices must be non-negative');
+    }
+    
+    const patientsArray = api.arr(['patients']);
+    if (patientIndex >= patientsArray.length()) {
+      throw new Error(`Patient index ${patientIndex} out of bounds`);
+    }
+    
+    const apArray = api.arr(['patients', patientIndex, 'assessment_and_plan']);
+    if (assessmentIndex >= apArray.length()) {
+      throw new Error(`Assessment index ${assessmentIndex} out of bounds`);
+    }
+
+    if (field === 'assessment') {
+      const assessmentObj = api.obj(['patients', patientIndex, 'assessment_and_plan', assessmentIndex]);
+      assessmentObj.set({assessment: value});
+    } else if (field === 'plan' && planIndex !== undefined) {
+      const planArray = api.arr(['patients', patientIndex, 'assessment_and_plan', assessmentIndex, 'plan']);
+      
+      if (planIndex >= planArray.length()) {
+        throw new Error(`Plan index ${planIndex} out of bounds`);
+      }
+      
+      // Replace the plan item at the specific index
+      planArray.del(planIndex, 1);
+      planArray.ins(planIndex, [value]);
+    }
+  }
+}

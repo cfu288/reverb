@@ -18,7 +18,7 @@ import { useForm } from "react-hook-form";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { BreadcrumbItem, BreadcrumbPage } from "@/components/ui/breadcrumb";
-import { usePatientList } from "@/providers/usePatientList";
+import { useRealtimePatientListContext } from "@/providers/RealtimePatientListProvider";
 import { AppHeader } from "@/components/AppHeader";
 
 type PatientValue =
@@ -37,7 +37,7 @@ export const GeneratePDF = () => {
     updatePatientById,
     state: patientListState,
     error: patientListError,
-  } = usePatientList();
+  } = useRealtimePatientListContext();
 
   const {
     allTemplates,
@@ -146,6 +146,26 @@ export const GeneratePDF = () => {
     setPatients((prevPatients) => [...prevPatients, data]);
     closeAddPatientModal();
   };
+
+  // Handle loading state
+  if (patientListState === "LOADING") {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900" />
+      </div>
+    );
+  }
+
+  // Handle error state
+  if (patientListState === "ERROR") {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-red-500">
+          Error loading patient list: {patientListError || 'Unknown error'}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -291,6 +311,7 @@ const PatientRow = ({
   updatePatient: (key: keyof Patient, value: PatientValue) => void;
 }) => {
   const handleChange = (key: keyof Patient, value: PatientValue) => {
+    console.log('[PatientRow] handleChange called:', { key, value });
     updatePatient(key, value);
   };
 
@@ -339,7 +360,14 @@ const PatientRow = ({
       <td className="border p-2 min-w-96">
         <Textarea
           value={patient.one_liner || ""}
-          onChange={(e) => handleChange("one_liner", e.target.value)}
+          onChange={(e) => {
+            console.log('[GeneratePDF] Textarea onChange:', {
+              newValue: e.target.value,
+              currentValue: patient.one_liner,
+              patientId: patient.id
+            });
+            handleChange("one_liner", e.target.value);
+          }}
           className="w-full"
           placeholder="One Liner"
           rows={4}

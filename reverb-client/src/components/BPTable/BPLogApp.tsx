@@ -1,4 +1,3 @@
-import debounce from "lodash.debounce";
 import { useCallback, useState, useMemo } from "react";
 
 import {
@@ -18,7 +17,6 @@ import { generateDefaultDatetime } from "./helpers/generateDefaultDatetime";
 import { BPLog } from "./BPLog";
 import { useMeanAndClassification } from "./hooks/useMeanAndClassification";
 import { useFutureEntryDate } from "./hooks/useFutureEntryDate";
-import { useSaveDataToSession } from "./hooks/useSaveDataToSession";
 import { ReviewEntries } from "./ReviewEntries/ReviewEntries";
 import { Header } from "./Header";
 
@@ -29,21 +27,10 @@ declare module "@tanstack/react-table" {
   }
 }
 
-export const sessionStorageKey = "reverb_bp-log-data";
-
-const saveDataToSession = debounce((data: BPLog[]) => {
-  if (data.length !== 0) {
-    console.log("Saving data to session storage");
-    sessionStorage.setItem(sessionStorageKey, JSON.stringify(data));
-  }
-}, 100);
 
 const BPLogApp = () => {
   // Variable declarations
-  const [data, setData] = useState<BPLog[]>(() => {
-    const savedData = sessionStorage.getItem(sessionStorageKey);
-    return savedData ? JSON.parse(savedData) : [];
-  });
+  const [data, setData] = useState<BPLog[]>([]);
 
   const [futureEntry, setFutureEntry] = useState<BPLog>({
     id: "",
@@ -144,7 +131,6 @@ const BPLogApp = () => {
     },
   });
   useFutureEntryDate(data, setFutureEntry);
-  useSaveDataToSession(data, saveDataToSession);
 
   return (
     <AppLayout>

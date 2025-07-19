@@ -6,17 +6,17 @@ import AuthenticationException from '#exceptions/authentication_exception'
 export default class AuthController {
   async login({ auth, request, response }: HttpContext) {
     const { email, password } = request.only(['email', 'password'])
-    
+
     // Validate input
     if (!email || !password) {
       logger.warn('Login attempt with missing credentials')
       throw new AuthenticationException('Email or username and password are required')
     }
-    
+
     // Use the auth system's verifyCredentials which checks both username and email
     try {
       const user = await User.verifyCredentials(email, password)
-      
+
       /**
        * Now create a JWT token for user and send it back
        */

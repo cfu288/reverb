@@ -51,10 +51,10 @@ export default class UserController {
       }
 
       if (await bouncer.with(UserPolicy).denies('create', validatedRequestData, tenant)) {
-        logger.info(`Unauthorized user creation attempt in tenant: ${tenant.id}`, { 
+        logger.info(`Unauthorized user creation attempt in tenant: ${tenant.id}`, {
           username: userData.username,
           email: userData.email,
-          roleKey: userData.roleKey
+          roleKey: userData.roleKey,
         })
         throw new UnauthorizedException('Not authorized to perform this action')
       }

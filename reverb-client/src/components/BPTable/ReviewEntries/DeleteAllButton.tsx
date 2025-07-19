@@ -10,7 +10,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { BPLog } from "../BPLog";
-import { sessionStorageKey } from "../BPLogApp";
 
 export const DeleteAllButton = ({
   setData,
@@ -35,7 +34,6 @@ export const DeleteAllButton = ({
               variant="destructive"
               onClick={() => {
                 setData([]);
-                sessionStorage.removeItem(sessionStorageKey);
               }}
             >
               Confirm Delete

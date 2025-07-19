@@ -135,7 +135,7 @@ export function NavUser() {
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => {
               setDropdownOpen(false)
-              logout()
+              logout().catch(console.error)
             }}>
               <LogOut className="mr-2 h-4 w-4" />
               Log out

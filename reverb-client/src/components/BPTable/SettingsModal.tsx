@@ -1,6 +1,11 @@
 import { useLocalAppSettingsDispatch } from "@/providers/LocalAppSettingsProvider/hooks/useLocalAppSettingsDispatch";
 import { useLocalSetting } from "@/providers/LocalAppSettingsProvider/hooks/useLocalSetting";
-import { Modal } from "../Modal";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "../ui/input";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -103,26 +108,12 @@ export const SettingsModal = ({
     confirmPasswordInput !== "";
 
   return (
-    <Modal
-      title={modalTitle}
-      isOpen={isOpen}
-      onClose={onClose}
-      footerItems={
-        <Button
-          type="submit"
-          form="settings-form"
-          disabled={
-            !passwordLengthValid ||
-            (oaiKeyResult.status === "ERROR" &&
-              oaiKeyResult.errorCode === "PASSWORD_NOT_INITIALIZED" &&
-              !passwordsMatch)
-          }
-        >
-          Save
-        </Button>
-      }
-    >
-      <form id="settings-form" onSubmit={handleSubmit}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{modalTitle}</DialogTitle>
+        </DialogHeader>
+        <form id="settings-form" onSubmit={handleSubmit}>
         {oaiKeyResult.status === "ERROR" ? (
           <>
             <p className="text-sm text-gray-600">{errorMessage}</p>
@@ -198,7 +189,22 @@ export const SettingsModal = ({
             />
           </div>
         )}
-      </form>
-    </Modal>
+          <div className="mt-4">
+            <Button
+              type="submit"
+              form="settings-form"
+              disabled={
+                !passwordLengthValid ||
+                (oaiKeyResult.status === "ERROR" &&
+                  oaiKeyResult.errorCode === "PASSWORD_NOT_INITIALIZED" &&
+                  !passwordsMatch)
+              }
+            >
+              Save
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 };

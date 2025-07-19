@@ -104,6 +104,7 @@ const AuthController = () => import('#controllers/auth_controller')
 const TenantController = () => import('#controllers/tenant_controller')
 const PatientListController = () => import('#controllers/patient_list_controller')
 const PatientController = () => import('#controllers/patient_controller')
+const PatientListCrdtsController = () => import('#controllers/patient_list_crdts_controller')
 
 router.on('/').render('index')
 
@@ -125,13 +126,24 @@ router
             router.get('/user', [UsersController, 'all'])
 
             // Patient list routes
-            router.post('/patient-list', [PatientListController, 'create'])
-            router.get('/patient-list', [PatientListController, 'all'])
-            router.get('/patient-list/:url_safe_name', [PatientListController, 'view'])
-            router.delete('/patient-list/:url_safe_name', [PatientListController, 'delete'])
+            router.post('/patient-lists', [PatientListController, 'create'])
+            router.get('/patient-lists', [PatientListController, 'all'])
+            router.get('/patient-lists/:url_safe_name', [PatientListController, 'view'])
+            router.delete('/patient-lists/:url_safe_name', [PatientListController, 'delete'])
+
+            // Patient list CRDT routes
+            router.post('/patient-lists/crdt', [PatientListCrdtsController, 'create'])
+            router.get('/patient-lists/:urlSafeName/crdt', [
+              PatientListCrdtsController,
+              'getCRDTState',
+            ])
+            router.post('/patient-lists/:urlSafeName/patches', [
+              PatientListCrdtsController,
+              'applyPatches',
+            ])
 
             // Patient routes
-            router.post('/patient-list/:list/patient', [PatientController, 'create'])
+            router.post('/patient-lists/:list/patients', [PatientController, 'create'])
             router.get('/patient/:id', [PatientController, 'view'])
             router.put('/patient/:id', [PatientController, 'update'])
             router.delete('/patient/:id', [PatientController, 'delete'])
