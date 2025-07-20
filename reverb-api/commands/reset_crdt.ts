@@ -14,12 +14,10 @@ export default class ResetCrdt extends BaseCommand {
 
   async run() {
     const urlSafeName = await this.prompt.ask('Enter the patient list URL safe name', {
-      default: 'default'
+      default: 'default',
     })
 
-    const patientList = await PatientList.query()
-      .where('urlSafeName', urlSafeName)
-      .first()
+    const patientList = await PatientList.query().where('urlSafeName', urlSafeName).first()
 
     if (!patientList) {
       this.logger.error(`Patient list "${urlSafeName}" not found`)
@@ -38,7 +36,7 @@ export default class ResetCrdt extends BaseCommand {
     // Create a fresh CRDT
     const model = Model.create()
     model.api.root(patientListSchema)
-    
+
     // Save it
     const crdtBinary = model.toBinary()
     patientList.crdtDocument = Buffer.from(crdtBinary)

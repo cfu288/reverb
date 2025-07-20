@@ -81,19 +81,13 @@ const patientSchema = s.obj({
 })
 
 // Define the complete Patient List CRDT schema
+// IMPORTANT: This schema should only contain collaborative data that users can edit
+// Metadata like id, owner_id, timestamps, etc. should be stored in the database only
 export const patientListSchema = s.obj({
-  // Metadata
-  id: s.str(''),
-  name: s.str(''),
-  owner_id: s.con(0),
-  url_safe_name: s.str(''),
-  created_at: s.str(''),
-  updated_at: s.str(''),
-
-  // Patient data
+  // Patient data - the main collaborative content
   patients: s.arr([patientSchema]),
 
-  // List configuration
+  // List configuration - user-editable settings
   display_template_id: s.str(''), // optional in frontend
   settings: s.obj({
     sort_order: s.str(''), // optional in frontend, "location" | "name" | "mrn"
@@ -105,19 +99,8 @@ export const patientListSchema = s.obj({
 })
 
 // Helper function to create an empty patient list CRDT
-export function createEmptyPatientListCRDT(metadata: {
-  id: string
-  name: string
-  owner_id: number
-  url_safe_name: string
-}): any {
+export function createEmptyPatientListCRDT(): any {
   return {
-    id: metadata.id,
-    name: metadata.name,
-    owner_id: metadata.owner_id,
-    url_safe_name: metadata.url_safe_name,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
     patients: [],
     display_template_id: null, // Match frontend's null default
     settings: {

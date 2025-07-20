@@ -1,5 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import PatientList from '#models/patient_list'
+import Tenant from '#models/tenant'
 import { Model } from 'json-joy/lib/json-crdt/model/Model.js'
 import { Patch } from 'json-joy/lib/json-crdt-patch/index.js'
 import {
@@ -39,13 +40,7 @@ export default class PatientListCrdtsController {
       const model = Model.create(patientListSchema)
 
       // Initialize with data using the helper function
-      const initialData = createEmptyPatientListCRDT({
-        id: crypto.randomUUID(),
-        name: displayName,
-        owner_id: user.id,
-        url_safe_name: urlSafeName,
-      })
-
+      const initialData = createEmptyPatientListCRDT()
       model.api.root(initialData)
 
       // Convert to binary for storage
@@ -88,7 +83,7 @@ export default class PatientListCrdtsController {
 
     try {
       // Find the tenant first
-      const tenant = await db.from('tenants').where('url_safe_name', tenantUrlSafeName).first()
+      const tenant = await Tenant.query().where('url_safe_name', tenantUrlSafeName).first()
 
       if (!tenant) {
         return response.notFound({ error: 'Tenant not found' })
@@ -104,22 +99,16 @@ export default class PatientListCrdtsController {
       if (!patientList) {
         // For "default" list, create it automatically if it doesn't exist
         if (urlSafeName === 'default') {
-          // Verify user has access to this tenant
-          const userTenants = await auth.user!.related('tenants').query()
-          const userHasAccess = userTenants.some((t) => t.urlSafeName === tenantUrlSafeName)
-
-          if (!userHasAccess) {
+          // Verify user has access to THIS SPECIFIC tenant using the TenantPolicy
+          try {
+            await bouncer.with('TenantPolicy').authorize('view', tenant)
+          } catch (error) {
             return response.forbidden({ error: 'Access denied to this tenant' })
           }
 
           // Create default patient list
           const model = Model.create(patientListSchema as any)
-          const initialData = createEmptyPatientListCRDT({
-            id: crypto.randomUUID(),
-            name: 'Default Patient List',
-            owner_id: auth.user!.id,
-            url_safe_name: 'default',
-          })
+          const initialData = createEmptyPatientListCRDT()
           model.api.root(initialData)
           const crdtBinary = model.toBinary()
 
@@ -179,7 +168,7 @@ export default class PatientListCrdtsController {
       const tenantUrlSafeName = request.param('org')
 
       // Find the tenant first
-      const tenant = await db.from('tenants').where('url_safe_name', tenantUrlSafeName).first()
+      const tenant = await Tenant.query().where('url_safe_name', tenantUrlSafeName).first()
 
       if (!tenant) {
         return response.notFound({ error: 'Tenant not found' })
@@ -222,31 +211,36 @@ export default class PatientListCrdtsController {
       if (view.patients && Array.isArray(view.patients)) {
         for (const patient of view.patients) {
           // Check for patch operation data that shouldn't be in patient objects
-          const invalidKeys = Object.keys(patient).filter(key => {
+          const invalidKeys = Object.keys(patient).filter((key) => {
             // Numeric string keys like "0", "1" etc are signs of patch corruption
             return /^\d+$/.test(key)
           })
-          
+
           if (invalidKeys.length > 0) {
             console.error('CRDT validation failed: Patient object contains patch operation keys:', {
               patientId: patient.id,
               invalidKeys,
-              patient
+              patient,
             })
-            return response.badRequest({ 
+            return response.badRequest({
               error: 'CRDT validation failed: Patient data corrupted with patch operations',
               invalidKeys,
-              patientId: patient.id
+              patientId: patient.id,
             })
           }
         }
       }
 
-      // Save updated CRDT
+      // Save updated CRDT in a transaction for atomicity
       const updatedBinary = model.toBinary()
-      patientList.crdtDocument = Buffer.from(updatedBinary)
-      patientList.crdtVersion = (model.clock.tick(0) as any).time || 0
-      await patientList.save()
+      const updatedVersion = (model.clock.tick(0) as any).time || 0
+
+      await db.transaction(async (trx) => {
+        patientList.useTransaction(trx)
+        patientList.crdtDocument = Buffer.from(updatedBinary)
+        patientList.crdtVersion = updatedVersion
+        await patientList.save()
+      })
 
       // Broadcast patches to all connected clients
       const channelName = `org/${patientList.tenant.urlSafeName}/patient-lists/${urlSafeName}`
