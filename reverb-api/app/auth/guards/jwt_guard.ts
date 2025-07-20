@@ -92,7 +92,8 @@ export class JwtGuard<UserProvider extends JwtUserProviderContract<unknown>>
   /**
    * Auth expiration time in seconds (15 minutes)
    */
-  authTokenExpiry: number = 15 * 60
+  // authTokenExpiry: number = 15 * 60 // Original: 15 minutes
+  authTokenExpiry: number = 2 * 60 // Testing: 2 minutes
 
   refreshTokenExpiry: number = 48 * 60 * 60
 
