@@ -1,13 +1,7 @@
-import { Model } from 'json-joy/lib/json-crdt/model/Model';
-
 // Define the complete Patient List CRDT schema structure
+// IMPORTANT: This should only contain collaborative data that users can edit
+// Metadata like id, owner_id, timestamps etc. are stored in the database only
 export const patientListSchema = {
-  id: '',
-  name: '',
-  owner_id: 0,
-  url_safe_name: '',
-  created_at: '',
-  updated_at: '',
   patients: [],
   display_template_id: '',
   settings: {
@@ -20,19 +14,8 @@ export const patientListSchema = {
 };
 
 // Helper function to create an empty patient list CRDT
-export function createEmptyPatientListCRDT(metadata: {
-  id: string;
-  name: string;
-  owner_id: number;
-  url_safe_name: string;
-}): any {
+export function createEmptyPatientListCRDT(): any {
   return {
-    id: metadata.id,
-    name: metadata.name,
-    owner_id: metadata.owner_id,
-    url_safe_name: metadata.url_safe_name,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
     patients: [],
     display_template_id: '',
     settings: {

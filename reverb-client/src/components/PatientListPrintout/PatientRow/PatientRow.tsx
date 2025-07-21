@@ -6,6 +6,7 @@ import { HPISection } from "./HPISection";
 import { TodoSection } from "./TodoSection";
 import { Banner } from "./Banner";
 import { useTemplates } from "@/providers/TemplatesProvider";
+import { extractPlainTextFromLexical } from "@/components/RichTextEditor/RichTextEditor";
 
 export interface BannerProps {
   patient: Patient;
@@ -166,7 +167,14 @@ export const PatientRow: React.FC<PatientRowProps> = ({
               <Text>
                 <Text style={patientRowStyles.apText}>A/P: </Text>
                 <Text style={patientRowStyles.oneLinerText}>
-                  {patient.one_liner && <>{patient.one_liner}</>}
+                  {patient.one_liner && (
+                    <>
+                      {patient.one_liner.startsWith('{') 
+                        ? extractPlainTextFromLexical(patient.one_liner)
+                        : patient.one_liner
+                      }
+                    </>
+                  )}
                 </Text>
               </Text>
             </View>

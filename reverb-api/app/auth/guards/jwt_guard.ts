@@ -261,11 +261,16 @@ export class JwtGuard<UserProvider extends JwtUserProviderContract<unknown>>
    * or throw an exception
    */
   async authenticate(): Promise<UserProvider[typeof symbols.PROVIDER_REAL_USER]> {
+    // Start timing the entire authentication process
+    const authStartTime = performance.now()
+    const requestPath = `${this.ctx.request.method()} ${this.ctx.request.url()}`
+    
     /**
      * Avoid re-authentication when it has been done already
      * for the given request
      */
     if (this.authenticationAttempted) {
+      console.log(`[JWT Auth Timing] ${requestPath} - Using cached authentication (0ms)`)
       return this.getUserOrFail()
     }
     this.authenticationAttempted = true
@@ -293,10 +298,14 @@ export class JwtGuard<UserProvider extends JwtUserProviderContract<unknown>>
     /**
      * Verify token
      */
+    const jwtStartTime = performance.now()
     const payload = jwt.verify(token, this.options.secret, {
       issuer: env.get('SERVER_URL'),
       audience: env.get('CLIENT_URL'),
     })
+    const jwtEndTime = performance.now()
+    console.log(`[JWT Auth Timing] JWT verification: ${(jwtEndTime - jwtStartTime).toFixed(2)}ms`)
+    
     if (typeof payload !== 'object' || !('sub' in payload)) {
       throw new errors.E_UNAUTHORIZED_ACCESS('Unauthorized access', {
         guardDriverName: this.driverName,
@@ -304,12 +313,19 @@ export class JwtGuard<UserProvider extends JwtUserProviderContract<unknown>>
     }
 
     // Check the fingerprint
+    const fingerprintStartTime = performance.now()
     await this.verifyFingerprint(payload.fingerprint)
+    const fingerprintEndTime = performance.now()
+    console.log(`[JWT Auth Timing] Fingerprint verification: ${(fingerprintEndTime - fingerprintStartTime).toFixed(2)}ms`)
 
     /**
      * Fetch the user by user ID and save a reference to it
      */
+    const dbStartTime = performance.now()
     const providerUser = await this.userProvider.findById(payload.sub as string)
+    const dbEndTime = performance.now()
+    console.log(`[JWT Auth Timing] Database user lookup: ${(dbEndTime - dbStartTime).toFixed(2)}ms`)
+    
     if (!providerUser) {
       throw new errors.E_UNAUTHORIZED_ACCESS('Unauthorized access', {
         guardDriverName: this.driverName,
@@ -317,6 +333,16 @@ export class JwtGuard<UserProvider extends JwtUserProviderContract<unknown>>
     }
 
     this.user = providerUser.getOriginal()
+    
+    // Log total authentication time
+    const authEndTime = performance.now()
+    const authTime = authEndTime - authStartTime
+    console.log(`[JWT Auth Timing] ${requestPath} - Total: ${authTime.toFixed(2)}ms`)
+    console.log(`[JWT Auth Timing] ${requestPath} - Breakdown: JWT=${(jwtEndTime - jwtStartTime).toFixed(2)}ms, Fingerprint=${(fingerprintEndTime - fingerprintStartTime).toFixed(2)}ms, DB=${(dbEndTime - dbStartTime).toFixed(2)}ms`)
+    
+    // Store auth time in context for request timing middleware
+    ;(this.ctx as any).authTime = authTime
+    
     return this.getUserOrFail()
   }
 
@@ -379,12 +405,15 @@ export class JwtGuard<UserProvider extends JwtUserProviderContract<unknown>>
     }
 
     // Hash the fingerprint from the token payload
+    const hashStartTime = performance.now()
     const encoder = new TextEncoder()
     const data = encoder.encode(fingerprint)
     const hashBuffer = await crypto.subtle.digest('SHA-256', data)
     const hashedFingerprint = Array.from(new Uint8Array(hashBuffer))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('')
+    const hashEndTime = performance.now()
+    console.log(`[JWT Auth Timing] SHA-256 hashing: ${(hashEndTime - hashStartTime).toFixed(3)}ms`)
 
     // Compare the hashed fingerprint with the one in the token
     if (hashedFingerprint !== tokenFingerprint) {

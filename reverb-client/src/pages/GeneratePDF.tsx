@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { AssessmentAndPlanItem, Patient } from "../models/Patient";
 import {
@@ -16,10 +16,10 @@ import { useNavigate } from "react-router-dom";
 import { useTemplates } from "@/providers/TemplatesProvider";
 import { useForm } from "react-hook-form";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
 import { BreadcrumbItem, BreadcrumbPage } from "@/components/ui/breadcrumb";
 import { useRealtimePatientListContext } from "@/providers/RealtimePatientListProvider";
 import { AppHeader } from "@/components/AppHeader";
+import { RichTextEditor, extractPlainTextFromLexical } from "@/components/RichTextEditor/RichTextEditor";
 
 type PatientValue =
   | string
@@ -259,8 +259,6 @@ export const GeneratePDF = () => {
                 ? "Edit Todos"
                 : modalContent === "assessment_and_plan"
                 ? "Edit Assessment and Plan"
-                : modalContent === "hpi"
-                ? "Edit HPI"
                 : "Edit Details"}
             </DialogTitle>
             <DialogDescription>
@@ -268,8 +266,6 @@ export const GeneratePDF = () => {
                 ? "Manage todos for the selected patient."
                 : modalContent === "assessment_and_plan"
                 ? "Update the assessment and plan for the selected patient."
-                : modalContent === "hpi"
-                ? "Edit the history of present illness for the selected patient."
                 : "Edit patient details and information."}
             </DialogDescription>
           </DialogHeader>
@@ -310,8 +306,8 @@ const PatientRow = ({
   openModal: (id: string, content: ModalContent) => void;
   updatePatient: (key: keyof Patient, value: PatientValue) => void;
 }) => {
+  
   const handleChange = (key: keyof Patient, value: PatientValue) => {
-    console.log('[PatientRow] handleChange called:', { key, value });
     updatePatient(key, value);
   };
 
@@ -358,29 +354,24 @@ const PatientRow = ({
         />
       </td>
       <td className="border p-2 min-w-96">
-        <Textarea
+        <RichTextEditor
           value={patient.one_liner || ""}
-          onChange={(e) => {
-            console.log('[GeneratePDF] Textarea onChange:', {
-              newValue: e.target.value,
-              currentValue: patient.one_liner,
-              patientId: patient.id
-            });
-            handleChange("one_liner", e.target.value);
+          onChange={(lexicalJson) => {
+            handleChange("one_liner", lexicalJson);
           }}
           className="w-full"
           placeholder="One Liner"
-          rows={4}
         />
       </td>
-      <td className="border px-2 relative">
-        <div
-          className="flex flex-col max-h-48 overflow-hidden hover:overflow-y-auto transition-height duration-300 ease-in-out text-ellipsis cursor-pointer text-sm"
-          onClick={() => openModal(patient.id, "hpi")}
-        >
-          <div dangerouslySetInnerHTML={{ __html: patient.hpi || "" }} />
-          <span className="absolute top-0 right-0 m-2">✏️</span>
-        </div>
+      <td className="border p-2 min-w-96">
+        <RichTextEditor
+          value={patient.hpi || ""}
+          onChange={(lexicalJson) => {
+            handleChange("hpi", lexicalJson);
+          }}
+          className="w-full"
+          placeholder="HPI"
+        />
       </td>
       <td className="border px-4 py-2 relative">
         <ul className="flex flex-col max-h-48 overflow-hidden hover:overflow-y-auto transition-height duration-300 ease-in-out text-ellipsis cursor-pointer">
@@ -486,15 +477,6 @@ const ModalContentComponent = ({
   };
 
   switch (modalContent) {
-    case "hpi":
-      return (
-        <Textarea
-          value={currentPatient.hpi || ""}
-          onChange={handleHpiChange}
-          className="w-full mb-2"
-          rows={6}
-        />
-      );
     case "todos":
       return (
         <div>

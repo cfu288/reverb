@@ -43,11 +43,22 @@ export class AuthService {
     console.log('[AuthService] Saving tokens, expires_in:', tokens.expires_in);
     await this.ensureInitialized();
 
+    const now = Date.now();
+    const expiresAt = now + tokens.expires_in * 1000 - 30000; // Subtract 30 seconds for safety
+    
+    console.log('[AuthService] Token expiry calculation:', {
+      now: new Date(now).toISOString(),
+      expiresInSeconds: tokens.expires_in,
+      bufferTimeSeconds: 30,
+      actualExpirySeconds: (expiresAt - now) / 1000,
+      expiresAt: new Date(expiresAt).toISOString()
+    });
+
     const tokenData: StoredTokens = {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       idToken: tokens.id_token,
-      expiresAt: Date.now() + tokens.expires_in * 1000 - 30000, // Subtract 30 seconds for safety with 15-minute tokens
+      expiresAt: expiresAt,
     };
 
     sessionStorage.setItem(this.TOKEN_KEY, JSON.stringify(tokenData));
@@ -98,10 +109,23 @@ export class AuthService {
     await this.ensureInitialized();
 
     const tokens = this.getStoredTokens();
-    if (!tokens) return null;
+    if (!tokens) {
+      console.log('[AuthService] No tokens found in storage');
+      return null;
+    }
+
+    const now = Date.now();
+    const timeUntilExpiry = tokens.expiresAt - now;
+    console.log('[AuthService] Token status:', {
+      expiresAt: new Date(tokens.expiresAt).toISOString(),
+      now: new Date(now).toISOString(),
+      timeUntilExpiryMs: timeUntilExpiry,
+      timeUntilExpirySeconds: Math.floor(timeUntilExpiry / 1000),
+      isExpired: now >= tokens.expiresAt
+    });
 
     // Check if token is expired or about to expire
-    if (Date.now() >= tokens.expiresAt) {
+    if (now >= tokens.expiresAt) {
       console.log('[AuthService] Token expired, refreshing...');
       // Use existing refresh promise if one is in progress
       if (this.refreshPromise) {
@@ -145,51 +169,108 @@ export class AuthService {
    * Refresh the access token using the refresh token
    */
   private static async refreshAccessToken(): Promise<string | null> {
+    console.log('[AuthService] refreshAccessToken called');
     const tokens = this.getStoredTokens();
+    console.log('[AuthService] Current tokens:', {
+      hasAccessToken: !!tokens?.accessToken,
+      hasRefreshToken: !!tokens?.refreshToken,
+      refreshToken: tokens?.refreshToken?.substring(0, 20) + '...',
+      expiresAt: tokens?.expiresAt,
+      expired: tokens?.expiresAt ? Date.now() > tokens.expiresAt : 'no expiry'
+    });
+    
     if (!tokens?.refreshToken) {
+      console.log('[AuthService] No refresh token found, clearing tokens');
       this.clearTokens();
       return null;
     }
 
     try {
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_URL || "http://localhost:3333"
-        }/user/refresh`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include", // Include fingerprint cookie
-          body: JSON.stringify({ refresh_token: tokens.refreshToken }),
-        }
-      );
+      const refreshUrl = `${
+        import.meta.env.VITE_API_URL || "http://localhost:3333"
+      }/user/refresh`;
+      console.log('[AuthService] Sending refresh request to:', refreshUrl);
+      console.log('[AuthService] Refresh request body:', { 
+        refresh_token: tokens.refreshToken.substring(0, 20) + '...'
+      });
+      
+      const response = await fetch(refreshUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // Include fingerprint cookie
+        body: JSON.stringify({ refresh_token: tokens.refreshToken }),
+      });
+      
+      console.log('[AuthService] Refresh response status:', response.status);
+      console.log('[AuthService] Refresh response ok:', response.ok);
 
       if (!response.ok) {
-        throw new Error("Token refresh failed");
+        const errorText = await response.text();
+        console.log('[AuthService] Refresh failed, response body:', errorText);
+        throw new Error(`Token refresh failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('[AuthService] Refresh response data:', {
+        hasAccessToken: !!data.access_token,
+        expiresIn: data.expires_in,
+        tokenType: data.token_type
+      });
 
-      // Update stored tokens with new access token
+      // Update stored tokens with new access token (keep existing refresh token)
+      const currentTokens = this.getStoredTokens();
+      console.log('[AuthService] Before update, current tokens:', {
+        hasRefreshToken: !!currentTokens?.refreshToken,
+        hasIdToken: !!currentTokens?.idToken
+      });
+      
+      const now = Date.now();
+      const expiresAt = now + data.expires_in * 1000 - 30000; // Subtract 30 seconds for safety
+      
       const newTokenData: StoredTokens = {
         accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        idToken: data.id_token,
-        expiresAt: Date.now() + data.expires_in * 1000 - 30000,
+        refreshToken: currentTokens?.refreshToken || "", // Keep existing refresh token
+        idToken: currentTokens?.idToken || "", // Keep existing ID token
+        expiresAt: expiresAt,
       };
+      
+      console.log('[AuthService] New token data to save:', {
+        hasAccessToken: !!newTokenData.accessToken,
+        hasRefreshToken: !!newTokenData.refreshToken,
+        hasIdToken: !!newTokenData.idToken,
+        expiresAt: newTokenData.expiresAt,
+        expiresInSeconds: Math.floor((newTokenData.expiresAt - Date.now()) / 1000)
+      });
 
       sessionStorage.setItem(this.TOKEN_KEY, JSON.stringify(newTokenData));
+      console.log('[AuthService] Tokens saved to sessionStorage');
+      
+      // Verify save
+      const savedTokens = this.getStoredTokens();
+      console.log('[AuthService] Verification - tokens after save:', {
+        hasAccessToken: !!savedTokens?.accessToken,
+        hasRefreshToken: !!savedTokens?.refreshToken,
+        hasIdToken: !!savedTokens?.idToken
+      });
 
       // Notify other tabs about the refresh with full token data
       this.broadcast?.notifyTokenRefresh(newTokenData);
+      console.log('[AuthService] Token refresh successful, returning new access token');
 
       return data.access_token;
     } catch (error) {
-      console.error("Token refresh failed:", error);
+      console.error('[AuthService] Token refresh failed:', error);
+      console.error('[AuthService] Error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      console.log('[AuthService] Clearing tokens due to refresh failure');
       await this.clearTokens();
       // Dispatch event for soft navigation instead of hard redirect
+      console.log('[AuthService] Dispatching auth-logout-required event');
       window.dispatchEvent(new CustomEvent('auth-logout-required'));
       return null;
     }

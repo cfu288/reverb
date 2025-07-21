@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext, useMemo, useCallback } from 'react';
 import { useRealtimePatientList } from '@/hooks/useRealtimePatientList';
 import { CRDTHelpers } from '@/utils/crdtHelpers';
 import { Patient } from '@/models/Patient';
@@ -49,26 +49,13 @@ export function RealtimePatientListProvider({ children }: { children: React.Reac
   // Extract patients from the view
   const patients = useMemo(() => {
     if (!view) {
-      console.log('[RealtimePatientListProvider] No view available');
       return [];
     }
-    console.log('[RealtimePatientListProvider] Extracting patients from view:', {
-      patientsCount: view.patients?.length,
-      firstPatientOneLiner: view.patients?.[0]?.one_liner,
-      firstPatientOneLinerLength: view.patients?.[0]?.one_liner?.length,
-      viewType: typeof view,
-      patientsType: Array.isArray(view.patients) ? 'array' : typeof view.patients
-    });
     return view.patients || [];
-  }, [view]);
-  
-  // Log when view changes
-  React.useEffect(() => {
-    console.log('[RealtimePatientListProvider] View changed, patients:', patients);
   }, [view]);
 
   // Operations
-  const setPatients = (newPatients: Patient[] | ((prev: Patient[]) => Patient[])) => {
+  const setPatients = useCallback((newPatients: Patient[] | ((prev: Patient[]) => Patient[])) => {
     if (!model) return;
     
     // Handle function updater pattern
@@ -102,19 +89,15 @@ export function RealtimePatientListProvider({ children }: { children: React.Reac
         });
       });
     });
-  };
+  }, [model, patients, applyLocalChange]);
 
-  const updatePatientById = (id: string, updates: Partial<Patient>) => {
-    console.log('[RealtimePatientListProvider] updatePatientById:', { id, updates, hasModel: !!model });
+  const updatePatientById = useCallback((id: string, updates: Partial<Patient>) => {
     if (!model) return;
     
+    // Logging removed
+    
     applyLocalChange((api) => {
-      // First check the current view to debug
-      const currentView = model.view();
-      console.log('[RealtimePatientListProvider] Current view patients:', currentView.patients);
-      
       const patientIndex = CRDTHelpers.findPatientIndex(model, id);
-      console.log('[RealtimePatientListProvider] Found patient at index:', patientIndex);
       if (patientIndex === -1) {
         console.error('[RealtimePatientListProvider] Patient not found!');
         return;
@@ -123,18 +106,17 @@ export function RealtimePatientListProvider({ children }: { children: React.Reac
       // Update each field that's provided
       Object.entries(updates).forEach(([key, value]) => {
         if (value !== undefined) {
-          console.log('[RealtimePatientListProvider] Updating field:', { key, value });
           CRDTHelpers.updatePatientField(api, patientIndex, key, value);
         }
       });
     });
-  };
+  }, [model, applyLocalChange]);
 
-  const findPatientById = (id: string): Patient | undefined => {
+  const findPatientById = useCallback((id: string): Patient | undefined => {
     return patients.find(p => p.id === id);
-  };
+  }, [patients]);
 
-  const addPatient = (patient: Patient) => {
+  const addPatient = useCallback((patient: Patient) => {
     if (!model) return;
     
     applyLocalChange((api) => {
@@ -154,9 +136,9 @@ export function RealtimePatientListProvider({ children }: { children: React.Reac
         assessment_and_plan: patient.assessment_and_plan || []
       });
     });
-  };
+  }, [model, applyLocalChange]);
 
-  const removePatient = (id: string) => {
+  const removePatient = useCallback((id: string) => {
     if (!model) return;
     
     applyLocalChange((api) => {
@@ -165,7 +147,7 @@ export function RealtimePatientListProvider({ children }: { children: React.Reac
       
       CRDTHelpers.removePatient(api, patientIndex);
     });
-  };
+  }, [model, applyLocalChange]);
 
   // List management with actual switching
   const [allListNames, setAllListNames] = React.useState<string[]>(['default']);
@@ -188,17 +170,17 @@ export function RealtimePatientListProvider({ children }: { children: React.Reac
     }
   }, [currentTenant]);
   
-  const setCurrentListName = (name: string) => {
+  const setCurrentListName = useCallback((name: string) => {
     if (name !== currentListName && allListNames.includes(name)) {
       setCurrentListNameState(name);
     }
-  };
+  }, [currentListName, allListNames]);
 
   // Modal state (kept for compatibility)
   const [isNewListModalOpen, setIsNewListModalOpen] = React.useState(false);
   const [newListName, setNewListName] = React.useState('');
   
-  const handleNewListSubmit = async () => {
+  const handleNewListSubmit = useCallback(async () => {
     if (!newListName.trim()) return;
     
     try {
@@ -227,9 +209,9 @@ export function RealtimePatientListProvider({ children }: { children: React.Reac
       console.error('Failed to create new list:', error);
       alert('Failed to create new list');
     }
-  };
+  }, [newListName]);
 
-  const contextValue: RealtimePatientListContextType = {
+  const contextValue: RealtimePatientListContextType = useMemo(() => ({
     patients,
     currentListName,
     state: isLoading ? 'LOADING' : error ? 'ERROR' : 'SUCCESS',
@@ -246,7 +228,22 @@ export function RealtimePatientListProvider({ children }: { children: React.Reac
     newListName,
     setNewListName,
     handleNewListSubmit,
-  };
+  }), [
+    patients,
+    currentListName,
+    isLoading,
+    error,
+    setPatients,
+    updatePatientById,
+    findPatientById,
+    addPatient,
+    removePatient,
+    allListNames,
+    setCurrentListName,
+    isNewListModalOpen,
+    newListName,
+    handleNewListSubmit,
+  ]);
 
   return (
     <RealtimePatientListContext.Provider value={contextValue}>

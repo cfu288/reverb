@@ -147,12 +147,24 @@ export function useTransmitStream<T = unknown>(streamName: string) {
     const subscription = transmit.subscription(streamName);
     console.log(`[useTransmitStream] Subscription object:`, subscription);
     
+    // Debug: Track subscription timing
+    const subscriptionStartTime = Date.now();
+    
     const subscribe = async () => {
       try {
         console.log(`[useTransmitStream] Attempting to subscribe to: ${streamName}`);
         console.log(`[useTransmitStream] Calling subscription.create()`);
+        
+        // Add timeout warning
+        const timeoutId = setTimeout(() => {
+          console.warn(`[useTransmitStream] ⚠️ Subscription to ${streamName} is taking longer than 5 seconds...`);
+        }, 5000);
+        
         await subscription.create();
-        console.log(`[useTransmitStream] subscription.create() completed`);
+        clearTimeout(timeoutId);
+        
+        const subscriptionTime = Date.now() - subscriptionStartTime;
+        console.log(`[useTransmitStream] subscription.create() completed in ${subscriptionTime}ms`);
         
         if (isMounted) {
           console.log(`[useTransmitStream] Successfully subscribed to: ${streamName}`);

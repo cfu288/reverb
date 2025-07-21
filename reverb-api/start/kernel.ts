@@ -34,6 +34,7 @@ server.use([
  * requests with a registered route.
  */
 router.use([
+  () => import('#middleware/request_timing_middleware'),
   () => import('@adonisjs/core/bodyparser_middleware'),
   () => import('@adonisjs/auth/initialize_auth_middleware'),
   () => import('#middleware/initialize_bouncer_middleware'),

@@ -83,62 +83,18 @@ export class CRDTHelpers {
       throw new Error('Field name cannot be empty');
     }
     
-    console.log('[CRDTHelpers] updatePatientField:', { patientIndex, field, value });
-    
-    // First, let's check if the patient exists at this index
-    const patientsArray = api.arr(['patients']);
-    console.log('[CRDTHelpers] Patients array length:', patientsArray.length());
-    
     // Get the patient object
-    console.log('[CRDTHelpers] Getting patient object at path:', JSON.stringify(['patients', patientIndex]));
     const patient = api.obj(['patients', patientIndex]);
-    console.log('[CRDTHelpers] Got patient object:', !!patient);
-    console.log('[CRDTHelpers] Patient object is:', patient);
-    
-    // Get the full patient data to debug
-    const patientView = patient.view();
-    console.log('[CRDTHelpers] Patient data before update:', JSON.stringify(patientView, null, 2));
-    
-    // Try to access the field directly from the view
-    try {
-      const currentFieldValue = patientView[field];
-      console.log('[CRDTHelpers] Current field value from view:', field, '=', currentFieldValue);
-    } catch (e) {
-      console.log('[CRDTHelpers] Error accessing field from view:', e);
-    }
     
     // Perform the update
     try {
-      console.log('[CRDTHelpers] About to set field:', field, 'to value:', value);
-      console.log('[CRDTHelpers] Patient object type:', patient.constructor.name);
-      console.log('[CRDTHelpers] Patient object methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(patient)));
-      
-      // Log what we're trying to create
-      console.log('[CRDTHelpers] Creating node for value:', JSON.stringify({ value, type: typeof value }));
-      
-      // Check if api.builder has specific methods
-      console.log('[CRDTHelpers] Api.builder methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(api.builder)));
-      
       // The set() method expects the raw value, not a builder result
       // It will internally call builder.constOrJson() on the value
-      console.log('[CRDTHelpers] Calling patient.set with field:', field, 'and value:', value);
       patient.set({[field]: value});
-      console.log('[CRDTHelpers] Set operation completed successfully');
-      
-      // Verify the update
-      const verifyPatient = api.obj(['patients', patientIndex]);
-      const verifyView = verifyPatient.view();
-      console.log('[CRDTHelpers] Verification - field value after set:', verifyView[field]);
     } catch (e) {
       console.error('[CRDTHelpers] Error during set operation:', e);
       throw e;
     }
-    
-    // Get the patient view again to see if it changed
-    const patientViewAfter = patient.view();
-    console.log('[CRDTHelpers] Patient data after update:', JSON.stringify(patientViewAfter, null, 2));
-    
-    console.log('[CRDTHelpers] Set complete');
   }
 
   /**

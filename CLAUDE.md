@@ -125,3 +125,7 @@ PostgreSQL must be running locally. See `/reverb-api/README.md` for detailed set
 - Backend: Custom exceptions in `app/exceptions/`
 - Frontend: React Error Boundaries and try-catch blocks
 - All errors logged with appropriate context
+
+## Note on Undo/Redo Implementation
+
+The undo/redo implementation plan has been moved to the Lexical Integration Requirements document (`LEXICAL_INTEGRATION_REQUIREMENTS.md`) where it belongs with other feature planning. The implementation will use a custom history manager since json-joy doesn't provide a built-in UndoManager.

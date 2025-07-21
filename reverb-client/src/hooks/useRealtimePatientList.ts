@@ -5,7 +5,7 @@ import { encode as encodeVerbose, decode as decodeVerbose } from 'json-joy/lib/j
 import { useAuth } from '@/hooks/useAuth';
 import { useTransmitStream } from '@/providers/TransmitProvider';
 import { patientListSchema } from '@/schemas/patientListCrdt';
-import { ApiService } from '@/services/api';
+import { ApiService, ApiError } from '@/services/api';
 
 interface UseRealtimePatientListOptions {
   urlSafeName: string;
@@ -39,36 +39,30 @@ export function useRealtimePatientList({
   const { data: remotePatches, isSubscribed } = useTransmitStream<{ patches: any[] }>(channelName);
 
   // Subscribe to model changes using useSyncExternalStore
-  // For immediate updates (like text inputs), we need to subscribe to onLocalChange
+  // Subscribe to both local and remote changes for immediate UI updates
   const view = useSyncExternalStore(
-    model ? (callback) => {
-      console.log('[useRealtimePatientList] Setting up subscription with onLocalChange');
-      // Subscribe to local changes for immediate UI updates
-      const unsubscribe = model.api.onLocalChange.listen(() => {
-        console.log('[useRealtimePatientList] onLocalChange fired, calling callback');
+    (callback) => {
+      if (!modelRef.current) return () => {};
+      
+      // Subscribe to any patch application (local or remote)
+      const unsubscribePatch = modelRef.current.api.onPatch.listen(() => {
         callback();
       });
-      return unsubscribe;
-    } : () => () => {},
-    model ? () => {
-      const snapshot = model.view();
-      const firstPatient = snapshot?.patients?.[0];
-      console.log('[useRealtimePatientList] Getting snapshot:', {
-        hasSnapshot: !!snapshot,
-        patientsCount: snapshot?.patients?.length,
-        firstPatient: firstPatient ? {
-          id: firstPatient.id,
-          one_liner: firstPatient.one_liner,
-          one_liner_length: firstPatient.one_liner?.length,
-          one_liner_type: typeof firstPatient.one_liner,
-          first_name: firstPatient.first_name,
-          last_name: firstPatient.last_name
-        } : null,
-        modelClock: model ? (model.clock as any).time : null
+      // Also subscribe to local changes for completeness
+      const unsubscribeLocal = modelRef.current.api.onLocalChange.listen(() => {
+        callback();
       });
+      return () => {
+        unsubscribePatch();
+        unsubscribeLocal();
+      };
+    },
+    () => {
+      if (!modelRef.current) return null;
+      const snapshot = modelRef.current.view();
       return snapshot;
-    } : () => null,
-    model ? () => model.view() : () => null
+    },
+    () => modelRef.current ? modelRef.current.view() : null
   );
 
   // Load initial CRDT state from API
@@ -76,6 +70,8 @@ export function useRealtimePatientList({
     if (!currentTenant || !urlSafeName) {
       return;
     }
+
+    let unsubscribeFlush: (() => void) | null = null;
 
     const loadCRDT = async () => {
       setIsLoading(true);
@@ -90,9 +86,8 @@ export function useRealtimePatientList({
           const binaryData = new Uint8Array(response.crdt);
           const loadedModel = Model.fromBinary(binaryData);
           
-          // Log the structure for debugging
+          // Get the view to check for corruption
           const view = loadedModel.view();
-          console.log('[useRealtimePatientList] Loaded CRDT structure:', JSON.stringify(view, null, 2));
           
           // Check for corrupted patient structure
           if (view.patients && view.patients.length > 0) {
@@ -126,8 +121,7 @@ export function useRealtimePatientList({
           modelRef.current.api.autoFlush();
           
           // Listen to flush events and queue them for sync
-          modelRef.current.api.onFlush.listen((patch) => {
-            console.log('[useRealtimePatientList] onFlush fired, patch ops:', patch.ops.length);
+          unsubscribeFlush = modelRef.current.api.onFlush.listen((patch) => {
             syncQueueRef.current.push(patch);
             // Process queue asynchronously
             setTimeout(() => processSyncQueue(), 0);
@@ -144,7 +138,7 @@ export function useRealtimePatientList({
           newModel.api.autoFlush();
           
           // Listen to flush events and queue them for sync
-          newModel.api.onFlush.listen((patch) => {
+          unsubscribeFlush = newModel.api.onFlush.listen((patch) => {
             syncQueueRef.current.push(patch);
             // Process queue asynchronously
             setTimeout(() => processSyncQueue(), 0);
@@ -159,6 +153,13 @@ export function useRealtimePatientList({
     };
 
     loadCRDT();
+
+    // Cleanup function to remove event listeners
+    return () => {
+      if (unsubscribeFlush) {
+        unsubscribeFlush();
+      }
+    };
   }, [currentTenant, urlSafeName]);
 
   // Process sync queue
@@ -175,6 +176,8 @@ export function useRealtimePatientList({
       const encodedPatches = patchesToSync.map(patch => encodeVerbose(patch));
       const currentVersion = (modelRef.current.clock as any).time || 0;
       
+      // Syncing patches
+      
       await ApiService.post(`/patient-lists/${urlSafeName}/patches`, {
         patches: encodedPatches,
         version: currentVersion,
@@ -183,8 +186,16 @@ export function useRealtimePatientList({
       lastSyncedVersionRef.current = currentVersion;
     } catch (err) {
       console.error('Failed to sync patches:', err);
-      // Put patches back in queue to retry
-      syncQueueRef.current = [...patchesToSync, ...syncQueueRef.current];
+      
+      // Check if it's an authentication error
+      if (err instanceof ApiError && err.status === 401) {
+        console.error('Authentication failed while syncing patches. User needs to re-authenticate.');
+        // Don't put patches back in queue for auth failures - they'll accumulate
+        // The auth system will handle logout via the auth-logout-required event
+      } else {
+        // Put patches back in queue to retry for other errors
+        syncQueueRef.current = [...patchesToSync, ...syncQueueRef.current];
+      }
     } finally {
       isSyncingRef.current = false;
     }
@@ -192,29 +203,26 @@ export function useRealtimePatientList({
 
   // Apply local changes
   const applyLocalChange = useCallback((callback: (api: any) => void) => {
-    console.log('[useRealtimePatientList] applyLocalChange called, hasModel:', !!modelRef.current, 'stateModel:', !!model);
     if (!modelRef.current) return;
 
     try {
       // Apply the change locally
       // With autoFlush enabled, changes are immediately flushed and trigger onFlush
-      console.log('[useRealtimePatientList] Calling callback with api');
       callback(modelRef.current.api);
-      console.log('[useRealtimePatientList] Callback completed');
       
-      // Force a re-render by updating state
-      setModel(modelRef.current);
+      // The useSyncExternalStore subscription will handle re-renders
     } catch (err) {
       console.error('[useRealtimePatientList] Failed to apply local change:', err);
       setError(err as Error);
     }
-  }, [model]);
+  }, []);
 
   // Apply remote patches
   useEffect(() => {
     if (!remotePatches || !modelRef.current) return;
 
     try {
+      
       // Decode and apply patches from remote
       const patches = remotePatches.patches.map(patchData => decodeVerbose(patchData));
       
@@ -222,10 +230,11 @@ export function useRealtimePatientList({
         modelRef.current.applyPatch(patch);
       }
 
-      // React will automatically re-render via useSyncExternalStore subscription
-      
+
       // Update last synced version to avoid re-syncing remote changes
-      lastSyncedVersionRef.current = modelRef.current.clock.tick;
+      lastSyncedVersionRef.current = (modelRef.current.clock as any).time;
+      
+      // The useSyncExternalStore subscription should handle the re-render
     } catch (err) {
       console.error('Failed to apply remote patches:', err);
     }

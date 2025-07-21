@@ -57,7 +57,13 @@
     "tailwindcss-animate": "^1.0.7",
     "use-editable": "^2.3.3",
     "vaul": "^1.1.2",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "lexical": "^0.21.0",
+    "@lexical/react": "^0.21.0",
+    "@lexical/rich-text": "^0.21.0",
+    "@lexical/plain-text": "^0.21.0",
+    "@lexical/list": "^0.21.0",
+    "@lexical/utils": "^0.21.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.11.1",

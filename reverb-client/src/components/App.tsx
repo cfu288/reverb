@@ -8,7 +8,7 @@ import { CreateTemplate } from "@/pages/TemplateConfig/CreateTemplate";
 import { EditTemplate } from "@/pages/TemplateConfig/EditTemplate";
 import BPLogApp from "./BPTable/BPLogApp";
 import { LocalAppSettingsProvider } from "../providers/LocalAppSettingsProvider/LocalAppSettingsProvider";
-import { PatientListProviderWrapper } from "@/providers/PatientListProviderWrapper";
+import { RealtimePatientListProvider } from "@/providers/RealtimePatientListProvider";
 import { TemplatesProvider } from "@/providers/TemplatesProvider";
 import { AppLayout } from "@/components/AppLayout";
 import LoginView from "@/pages/LoginView";
@@ -23,11 +23,11 @@ const ProtectedProviders = ({ children }: { children: React.ReactNode }) => {
   return (
     <TenantProvider>
       <TransmitProvider>
-        <PatientListProviderWrapper>
+        <RealtimePatientListProvider>
           <TemplatesProvider>
             {children}
           </TemplatesProvider>
-        </PatientListProviderWrapper>
+        </RealtimePatientListProvider>
       </TransmitProvider>
     </TenantProvider>
   );

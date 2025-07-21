@@ -1,6 +1,7 @@
 import { HPISectionProps } from "./PatientRow";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import { useTemplates } from "@/providers/TemplatesProvider";
+import { extractPlainTextFromLexical } from "@/components/RichTextEditor/RichTextEditor";
 
 const patientRowStyles = StyleSheet.create({
   apText: {
@@ -62,7 +63,10 @@ export const HPISection: React.FC<HPISectionProps> = ({
                 <View>
                   {patient.hpi && (
                     <Text style={patientRowStyles.hpiLineText}>
-                      {patient.hpi}
+                      {patient.hpi.startsWith('{') 
+                        ? extractPlainTextFromLexical(patient.hpi)
+                        : patient.hpi
+                      }
                     </Text>
                   )}
                 </View>

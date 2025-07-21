@@ -159,4 +159,4 @@ export const ShowPDF = () => {
   );
 };
 
-export type ModalContent = "hpi" | "todos" | "assessment_and_plan" | null;
+export type ModalContent = "todos" | "assessment_and_plan" | null;
