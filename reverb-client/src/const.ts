@@ -36,15 +36,15 @@ export const display_templates: DisplayTemplate[] = [
     dailyTodoList: [
       {
         description: "Note",
-        status: "OPEN",
+        status: "open",
       },
       {
         description: "Labs",
-        status: "OPEN",
+        status: "open",
       },
       {
         description: "Hospital Course",
-        status: "OPEN",
+        status: "open",
       },
     ],
     todo: {
@@ -95,15 +95,15 @@ export const display_templates: DisplayTemplate[] = [
     dailyTodoList: [
       {
         description: "Note",
-        status: "OPEN",
+        status: "open",
       },
       {
         description: "Labs",
-        status: "OPEN",
+        status: "open",
       },
       {
         description: "Hospital Course",
-        status: "OPEN",
+        status: "open",
       },
     ],
     patientsPerPage: 2,
@@ -157,11 +157,11 @@ export const display_templates: DisplayTemplate[] = [
     dailyTodoList: [
       {
         description: "Note",
-        status: "OPEN",
+        status: "open",
       },
       {
         description: "Orders",
-        status: "OPEN",
+        status: "open",
       },
     ],
     patientsPerPage: 1,
@@ -231,11 +231,11 @@ export const display_templates: DisplayTemplate[] = [
     dailyTodoList: [
       {
         description: "Note",
-        status: "OPEN",
+        status: "open",
       },
       {
         description: "Orders",
-        status: "OPEN",
+        status: "open",
       },
     ],
     patientsPerPage: 1,
@@ -317,19 +317,19 @@ export const display_templates: DisplayTemplate[] = [
     dailyTodoList: [
       {
         description: "Note",
-        status: "OPEN",
+        status: "open",
       },
       {
         description: "CBC, CMP, Mg, Phos (4am)",
-        status: "OPEN",
+        status: "open",
       },
       {
         description: "AVG (4am), CXR (1am)",
-        status: "OPEN",
+        status: "open",
       },
       {
         description: "T&S",
-        status: "OPEN",
+        status: "open",
       },
     ],
     patientsPerPage: 1,

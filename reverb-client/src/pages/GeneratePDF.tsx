@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AssessmentAndPlanItem, Patient } from "../models/Patient";
 import {
@@ -16,10 +18,14 @@ import { useNavigate } from "react-router-dom";
 import { useTemplates } from "@/providers/TemplatesProvider";
 import { useForm } from "react-hook-form";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { BreadcrumbItem, BreadcrumbPage } from "@/components/ui/breadcrumb";
 import { useRealtimePatientListContext } from "@/providers/RealtimePatientListProvider";
 import { AppHeader } from "@/components/AppHeader";
 import { RichTextEditor, extractPlainTextFromLexical } from "@/components/RichTextEditor/RichTextEditor";
+import { TodoList } from "@/components/Todo";
+import { getAllTags } from "@/utils/todoUtils";
+import { useAuth } from "@/hooks/useAuth";
 
 type PatientValue =
   | string
@@ -27,6 +33,27 @@ type PatientValue =
   | AssessmentAndPlanItem[]
   | Todo[]
   | Partial<DisplayTemplate>[];
+
+// Centralized todo toggle function
+const toggleTodoStatus = (
+  patient: Patient,
+  todoId: string,
+  handleChange: (field: keyof Patient, value: PatientValue) => void
+) => {
+  const updatedTodos = patient.todos?.map(todo => {
+    if (todo.id === todoId) {
+      return {
+        ...todo,
+        status: todo.status === 'complete' ? 'open' : 'complete',
+        updatedAt: new Date().toISOString(),
+        completedAt: todo.status === 'open' ? new Date().toISOString() : undefined,
+      } as Todo;
+    }
+    return todo;
+  }) || [];
+  
+  handleChange('todos', updatedTodos);
+};
 
 export const GeneratePDF = () => {
   const {
@@ -378,43 +405,31 @@ const PatientRow = ({
           {patient.todos?.map((todo, index) => (
             <li
               key={index}
-              className={`${todo.status === "CLOSED" ? "line-through" : ""}`}
+              className={`${todo.status === "complete" ? "line-through" : ""}`}
             >
               <div
                 className="flex items-center cursor-pointer"
-                onClick={() => {
-                  const updatedTodos = patient.todos
-                    ? patient.todos.map((t) =>
-                        t.description === todo.description
-                          ? {
-                              ...t,
-                              status:
-                                todo.status === "CLOSED" ? "OPEN" : "CLOSED",
-                            }
-                          : t
-                      )
-                    : [];
-                  handleChange("todos", updatedTodos);
-                }}
+                onClick={() => toggleTodoStatus(patient, todo.id, handleChange)}
               >
                 <Checkbox
-                  checked={todo.status === "CLOSED" || false}
-                  onCheckedChange={(checked) => {
-                    const updatedTodos = patient.todos
-                      ? patient.todos.map((t) =>
-                          t.description === todo.description
-                            ? {
-                                ...t,
-                                status: checked ? "CLOSED" : "OPEN",
-                              }
-                            : t
-                        )
-                      : [];
-                    handleChange("todos", updatedTodos);
-                  }}
+                  checked={todo.status === "complete" || false}
                   className="mr-2 pointer-events-none"
                 />
-                <span className="flex-grow">{todo.description}</span>
+                <span className="flex-grow">{todo.text || todo.description || ''}</span>
+                {todo.tags && todo.tags.length > 0 && (
+                  <div className="flex gap-1 ml-2">
+                    {todo.tags.slice(0, 2).map((tag, idx) => (
+                      <Badge key={idx} variant="secondary" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                    {todo.tags.length > 2 && (
+                      <Badge variant="secondary" className="text-xs">
+                        +{todo.tags.length - 2}
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </div>
             </li>
           ))}
@@ -479,34 +494,11 @@ const ModalContentComponent = ({
   switch (modalContent) {
     case "todos":
       return (
-        <div>
-          <ul>
-            {(currentPatient.todos || []).map(
-              (todo: { description: string }, i: number) => (
-                <li key={`todo-${i}`} className="flex items-center mb-2">
-                  <Input
-                    type="text"
-                    value={todo.description}
-                    onChange={(e) =>
-                      updatePatient(
-                        "todos",
-                        (currentPatient.todos?.map(
-                          (t: { description: string }, j: number) =>
-                            j === i
-                              ? ({ description: e.target.value } as Todo)
-                              : t
-                        ) as Todo[]) || ([] as Todo[])
-                      )
-                    }
-                    className="w-full mr-2"
-                  />
-                  <Button onClick={() => removeItem("todos", i)}>🗑️</Button>
-                </li>
-              )
-            )}
-          </ul>
-          <Button onClick={() => addItem("todos")}>Add Todo</Button>
-        </div>
+        <TodoListWrapper
+          currentPatient={currentPatient}
+          updatePatient={updatePatient}
+          patients={patients}
+        />
       );
     case "assessment_and_plan":
       return (
@@ -850,5 +842,138 @@ const AddPatientForm = ({
       </div>
       <Button type="submit">Add Patient</Button>
     </form>
+  );
+};
+
+// TodoList wrapper component
+const TodoListWrapper = ({
+  currentPatient,
+  updatePatient,
+  patients,
+}: {
+  currentPatient: Patient;
+  updatePatient: (field: keyof Patient, value: PatientValue) => void;
+  patients: Patient[];
+}) => {
+  const { user } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const existingTags = getAllTags(patients);
+
+  // Clear error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
+  const handleAddTodo = (todoData: Partial<Todo>) => {
+    try {
+      if (!user?.id) {
+        setError('You must be logged in to add todos');
+        return;
+      }
+
+      if (!todoData.text?.trim()) {
+        setError('Todo text is required');
+        return;
+      }
+
+      const newTodo: Todo = {
+        id: crypto.randomUUID(),
+        text: todoData.text.trim(),
+        description: todoData.description || '',
+        status: todoData.status || 'open',
+        tags: todoData.tags || [],
+        dueTime: todoData.dueTime,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: user.id.toString(),
+      };
+      const updatedTodos = [...(currentPatient.todos || []), newTodo];
+      updatePatient("todos", updatedTodos);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add todo');
+      console.error('Error adding todo:', err);
+    }
+  };
+
+  const handleUpdateTodo = (todoId: string, updates: Partial<Todo>) => {
+    try {
+      const updatedTodos = (currentPatient.todos || []).map(todo =>
+        todo.id === todoId 
+          ? { ...todo, ...updates, updatedAt: new Date().toISOString() }
+          : todo
+      );
+      updatePatient("todos", updatedTodos);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update todo');
+      console.error('Error updating todo:', err);
+    }
+  };
+
+  const handleToggleComplete = (todoId: string) => {
+    try {
+      const todo = currentPatient.todos?.find(t => t.id === todoId);
+      if (!todo) {
+        setError('Todo not found');
+        return;
+      }
+
+      if (!user?.id) {
+        setError('You must be logged in to complete todos');
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const userId = user.id.toString();
+
+      if (todo.status === 'open') {
+        handleUpdateTodo(todoId, {
+          status: 'complete',
+          completedAt: now,
+          completedBy: userId,
+        });
+      } else if (todo.status === 'complete') {
+        handleUpdateTodo(todoId, {
+          status: 'open',
+          completedAt: undefined,
+          completedBy: undefined,
+        });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle todo');
+      console.error('Error toggling todo:', err);
+    }
+  };
+
+  const handleHideTodo = (todoId: string) => {
+    try {
+      handleUpdateTodo(todoId, { status: 'hidden' });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to hide todo');
+      console.error('Error hiding todo:', err);
+    }
+  };
+
+  return (
+    <div>
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      <TodoList
+        todos={currentPatient.todos || []}
+        existingTags={existingTags}
+        onAddTodo={handleAddTodo}
+        onUpdateTodo={handleUpdateTodo}
+        onToggleComplete={handleToggleComplete}
+        onHideTodo={handleHideTodo}
+      />
+    </div>
   );
 };

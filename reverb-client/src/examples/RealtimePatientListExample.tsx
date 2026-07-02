@@ -1,4 +1,3 @@
-import React from 'react';
 import { useRealtimePatientList } from '@/hooks/useRealtimePatientList';
 import { CRDTHelpers } from '@/utils/crdtHelpers';
 import { useAuth } from '@/hooks/useAuth';
@@ -43,15 +42,17 @@ export function RealtimePatientListExample({ listUrlSafeName }: { listUrlSafeNam
   const handleAddTodo = (patientIndex: number) => {
     applyLocalChange((api) => {
       CRDTHelpers.addTodo(api, patientIndex, {
-        description: 'New todo item',
-        status: 'OPEN',
+        text: 'New todo item',
+        description: '',
+        status: 'open',
+        createdBy: 'user-id',
       });
     });
   };
 
   const handleToggleTodo = (patientIndex: number, todoIndex: number) => {
     applyLocalChange((api) => {
-      CRDTHelpers.toggleTodoStatus(api, patientIndex, todoIndex);
+      CRDTHelpers.toggleTodoStatus(api, patientIndex, todoIndex, 'user-id');
     });
   };
 

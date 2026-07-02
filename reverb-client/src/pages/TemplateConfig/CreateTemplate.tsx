@@ -65,7 +65,7 @@ const defaultTemplate: Partial<DisplayTemplate> = {
     enableMisc: false,
   },
   todo: { enabled: true },
-  dailyTodoList: [{ description: "Note", status: "OPEN" }],
+  dailyTodoList: [{ description: "Note", status: "open" }],
 };
 
 export function CreateTemplate() {

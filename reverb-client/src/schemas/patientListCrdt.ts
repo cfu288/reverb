@@ -47,12 +47,29 @@ export function createEmptyPatient(): any {
   };
 }
 
-// Helper to create empty todo
+// Helper to create empty todo with enhanced schema
 export function createEmptyTodo(): any {
+  const now = new Date().toISOString();
   return {
     id: crypto.randomUUID(),
+    text: '',
     description: '',
-    due_date: '',
-    status: 'OPEN',
+    status: 'open',
+    tags: [],
+    dueTime: {
+      type: 'once',
+      dueDate: '',
+      startDate: '',
+      occurrences: 1,
+      completedOccurrences: 0,
+      intervalHours: 0,
+      intervalDays: 0,
+      nextDue: '',
+    },
+    createdAt: now,
+    updatedAt: now,
+    completedAt: '',
+    createdBy: '',
+    completedBy: '',
   };
 }

@@ -1,11 +1,27 @@
 import { s } from 'json-joy/lib/json-crdt-patch/schema.js'
 
-// Define the Todo schema
+// Define the enhanced Todo schema
 const todoSchema = s.obj({
   id: s.str(''),
+  text: s.str(''),
   description: s.str(''),
-  due_date: s.str(''), // optional in frontend
-  status: s.str(''), // optional in frontend, "OPEN" | "CLOSED"
+  status: s.str('open'), // 'open' | 'complete' | 'hidden'
+  tags: s.arr([s.str('')]),
+  dueTime: s.obj({
+    type: s.str('once'), // 'once' | 'n_times' | 'recurring_hours' | 'recurring_days'
+    dueDate: s.str(''), // ISO date string
+    startDate: s.str(''), // ISO date string
+    occurrences: s.con(1),
+    completedOccurrences: s.con(0),
+    intervalHours: s.con(0),
+    intervalDays: s.con(0),
+    nextDue: s.str(''), // ISO date string
+  }),
+  createdAt: s.str(''), // ISO date string
+  updatedAt: s.str(''), // ISO date string
+  completedAt: s.str(''), // ISO date string
+  createdBy: s.str(''),
+  completedBy: s.str(''),
 })
 
 // Define the Lab schema

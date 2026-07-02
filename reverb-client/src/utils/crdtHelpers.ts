@@ -104,9 +104,21 @@ export class CRDTHelpers {
     api: any,
     patientIndex: number,
     todo: {
-      description: string;
-      due_date?: string;
-      status?: 'OPEN' | 'CLOSED';
+      text: string;
+      description?: string;
+      status?: 'open' | 'complete' | 'hidden';
+      tags?: string[];
+      dueTime?: {
+        type: 'once' | 'n_times' | 'recurring_hours' | 'recurring_days';
+        dueDate?: string;
+        startDate?: string;
+        occurrences?: number;
+        completedOccurrences?: number;
+        intervalHours?: number;
+        intervalDays?: number;
+        nextDue?: string;
+      };
+      createdBy: string;
     }
   ) {
     if (patientIndex < 0) {
@@ -118,18 +130,35 @@ export class CRDTHelpers {
       throw new Error(`Patient index ${patientIndex} out of bounds`);
     }
     
-    if (!todo.description || todo.description.trim() === '') {
-      throw new Error('Todo description cannot be empty');
+    if (!todo.text || todo.text.trim() === '') {
+      throw new Error('Todo text cannot be empty');
     }
     
+    const now = new Date().toISOString();
     const todoId = crypto.randomUUID();
     const todosArray = api.arr(['patients', patientIndex, 'todos']);
     
     todosArray.ins(todosArray.length(), [{
       id: todoId,
-      description: todo.description,
-      due_date: todo.due_date || '',
-      status: todo.status || 'OPEN',
+      text: todo.text,
+      description: todo.description || '',
+      status: todo.status || 'open',
+      tags: todo.tags || [],
+      dueTime: todo.dueTime || {
+        type: 'once',
+        dueDate: '',
+        startDate: '',
+        occurrences: 1,
+        completedOccurrences: 0,
+        intervalHours: 0,
+        intervalDays: 0,
+        nextDue: '',
+      },
+      createdAt: now,
+      updatedAt: now,
+      completedAt: '',
+      createdBy: todo.createdBy,
+      completedBy: '',
     }]);
     
     return todoId;
@@ -141,7 +170,8 @@ export class CRDTHelpers {
   static toggleTodoStatus(
     api: any,
     patientIndex: number,
-    todoIndex: number
+    todoIndex: number,
+    userId: string
   ) {
     if (patientIndex < 0 || todoIndex < 0) {
       throw new Error('Invalid index: indices must be non-negative');
@@ -159,8 +189,23 @@ export class CRDTHelpers {
     
     const todo = api.obj(['patients', patientIndex, 'todos', todoIndex]);
     const currentStatus = todo.get(['status'])?.val;
-    const statusValue = currentStatus === 'OPEN' ? 'CLOSED' : 'OPEN';
-    todo.set({status: statusValue});
+    const now = new Date().toISOString();
+    
+    if (currentStatus === 'open') {
+      todo.set({
+        status: 'complete',
+        completedAt: now,
+        completedBy: userId,
+        updatedAt: now
+      });
+    } else if (currentStatus === 'complete') {
+      todo.set({
+        status: 'open',
+        completedAt: '',
+        completedBy: '',
+        updatedAt: now
+      });
+    }
   }
 
   /**
@@ -195,8 +240,22 @@ export class CRDTHelpers {
     api: any,
     patientIndex: number,
     todoIndex: number,
-    field: string,
-    value: string
+    updates: Partial<{
+      text: string;
+      description: string;
+      status: 'open' | 'complete' | 'hidden';
+      tags: string[];
+      dueTime: {
+        type: 'once' | 'n_times' | 'recurring_hours' | 'recurring_days';
+        dueDate?: string;
+        startDate?: string;
+        occurrences?: number;
+        completedOccurrences?: number;
+        intervalHours?: number;
+        intervalDays?: number;
+        nextDue?: string;
+      };
+    }>
   ) {
     if (patientIndex < 0 || todoIndex < 0) {
       throw new Error('Invalid index: indices must be non-negative');
@@ -212,8 +271,12 @@ export class CRDTHelpers {
       throw new Error(`Todo index ${todoIndex} out of bounds`);
     }
     
-    // Set the new value
-    api.obj(['patients', patientIndex, 'todos', todoIndex]).set({[field]: value});
+    const now = new Date().toISOString();
+    // Set the new values with updated timestamp
+    api.obj(['patients', patientIndex, 'todos', todoIndex]).set({
+      ...updates,
+      updatedAt: now
+    });
   }
 
   /**
@@ -379,6 +442,93 @@ export class CRDTHelpers {
     if (!Array.isArray(todos)) return -1;
     
     return todos.findIndex((t: any) => t.id === todoId);
+  }
+
+  /**
+   * Complete a recurring todo and create next occurrence if needed
+   */
+  static completeRecurringTodo(
+    api: any,
+    patientIndex: number,
+    todoIndex: number,
+    userId: string
+  ) {
+    if (patientIndex < 0 || todoIndex < 0) {
+      throw new Error('Invalid index: indices must be non-negative');
+    }
+    
+    const patientsArray = api.arr(['patients']);
+    if (patientIndex >= patientsArray.length()) {
+      throw new Error(`Patient index ${patientIndex} out of bounds`);
+    }
+    
+    const todosArray = api.arr(['patients', patientIndex, 'todos']);
+    if (todoIndex >= todosArray.length()) {
+      throw new Error(`Todo index ${todoIndex} out of bounds`);
+    }
+    
+    const todoData = (api.view() as any).patients[patientIndex].todos[todoIndex];
+    const now = new Date();
+    const nowISO = now.toISOString();
+    
+    // Update the current todo
+    const todo = api.obj(['patients', patientIndex, 'todos', todoIndex]);
+    
+    if (todoData.dueTime?.type === 'n_times') {
+      const completedOccurrences = (todoData.dueTime.completedOccurrences || 0) + 1;
+      const occurrences = todoData.dueTime.occurrences || 1;
+      
+      if (completedOccurrences < occurrences) {
+        // Update completed occurrences
+        todo.set({
+          dueTime: {
+            ...todoData.dueTime,
+            completedOccurrences
+          },
+          updatedAt: nowISO
+        });
+      } else {
+        // Mark as complete
+        todo.set({
+          status: 'complete',
+          completedAt: nowISO,
+          completedBy: userId,
+          updatedAt: nowISO,
+          dueTime: {
+            ...todoData.dueTime,
+            completedOccurrences
+          }
+        });
+      }
+    } else if (todoData.dueTime?.type === 'recurring_hours' || todoData.dueTime?.type === 'recurring_days') {
+      // Calculate next due
+      let nextDue: Date;
+      if (todoData.dueTime.type === 'recurring_hours') {
+        nextDue = new Date(now.getTime() + (todoData.dueTime.intervalHours || 0) * 60 * 60 * 1000);
+      } else {
+        nextDue = new Date(now.getTime() + (todoData.dueTime.intervalDays || 0) * 24 * 60 * 60 * 1000);
+      }
+      
+      // Update the existing todo with new due time and reset status
+      todo.set({
+        status: 'open',
+        dueTime: {
+          ...todoData.dueTime,
+          nextDue: nextDue.toISOString()
+        },
+        updatedAt: nowISO,
+        completedAt: '',
+        completedBy: ''
+      });
+    } else {
+      // One-time todo - just mark as complete
+      todo.set({
+        status: 'complete',
+        completedAt: nowISO,
+        completedBy: userId,
+        updatedAt: nowISO
+      });
+    }
   }
 
   /**

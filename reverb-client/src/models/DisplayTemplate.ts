@@ -1,4 +1,8 @@
-import { Todo } from "./Todo";
+// Simplified todo type for display templates
+export interface TemplateTodo {
+  description: string;
+  status?: "open" | "complete" | "hidden";
+}
 
 /**
  * Base interface for section height configuration
@@ -69,5 +73,5 @@ export interface DisplayTemplate {
   todo?: BaseSection;
 
   // Lists
-  dailyTodoList?: Todo[];
+  dailyTodoList?: TemplateTodo[];
 }
